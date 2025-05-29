@@ -5,7 +5,7 @@ with open('README.md', 'r', encoding='utf-8') as f:
 
 setup(
     name='finops-cli',
-    version='0.1.0',
+    version='0.1.1',
     author='Cristian Córdova',
     author_email='cristian+finops-cli@helmcode.com',
     description='FinOps CLI - Tool for analyzing AWS costs.',
