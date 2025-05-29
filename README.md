@@ -39,7 +39,7 @@ cd finops-cli
 pip install -e .
 ```
 
-### From PyPI (not available yet)
+### From PyPI
 ```bash
 pip install finops-cli
 ```

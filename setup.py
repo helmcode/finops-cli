@@ -7,7 +7,7 @@ setup(
     name='finops-cli',
     version='0.1.0',
     author='Cristian Córdova',
-    author_email='cristian@helmcode.com',
+    author_email='cristian+finops-cli@helmcode.com',
     description='FinOps CLI - Tool for analyzing AWS costs.',
     long_description=long_description,
     long_description_content_type='text/markdown',
