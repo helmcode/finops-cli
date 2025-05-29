@@ -4,14 +4,14 @@ with open('README.md', 'r', encoding='utf-8') as f:
     long_description = f.read()
 
 setup(
-    name='aws-finops-cli',
+    name='finops-cli',
     version='0.1.0',
     author='Cristian Córdova',
     author_email='cristian@helmcode.com',
-    description='AWS FinOps CLI - Tool for analyzing AWS costs.',
+    description='FinOps CLI - Tool for analyzing AWS costs.',
     long_description=long_description,
     long_description_content_type='text/markdown',
-    url='https://github.com/helmcode/aws-finops-cli',
+    url='https://github.com/helmcode/finops-cli',
     packages=find_packages(include=['cli', 'cli.src']),
     include_package_data=True,
     install_requires=[
@@ -22,7 +22,7 @@ setup(
     ],
     entry_points={
         'console_scripts': [
-            'aws-finops=cli.finops_cli:cli',
+            'finops=cli.finops_cli:cli',
         ],
     },
     python_requires='>=3.7',

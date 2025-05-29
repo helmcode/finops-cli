@@ -165,17 +165,17 @@ class EC2CostCalculator:
             SUCCESS = '\033[38;5;34m' if use_colors else ''  # Soft green
             WARNING = '\033[38;5;208m' if use_colors else ''  # Orange
             DANGER = '\033[38;5;196m' if use_colors else ''  # Red
-            
+
             # Text colors
             TEXT = '\033[38;5;250m' if use_colors else ''  # Light gray
             TEXT_BOLD = '\033[1;38;5;255m' if use_colors else ''  # White bold
             TEXT_MUTED = '\033[38;5;240m' if use_colors else ''  # Dark gray
-            
+
             # Utility
             RESET = '\033[0m' if use_colors else ''
             BOLD = '\033[1m' if use_colors else ''
             UNDERLINE = '\033[4m' if use_colors else ''
-            
+
             # Aliases for compatibility
             HEADER = PRIMARY
             BLUE = PRIMARY
@@ -242,30 +242,30 @@ class EC2CostCalculator:
 
         # Print total potential savings
         if total_instances > 0:
-            # Asegurarse de que total_monthly_cost sea un número, no un string
+            # Ensure total_monthly_cost is a number, not a string
             total_monthly_cost = float(summary['total_monthly_cost']) if isinstance(summary['total_monthly_cost'], (int, float)) else 0.0
-            
-            # Calcular el porcentaje de ahorro
-            avg_savings_pct = (total_reserved_savings / (total_reserved_savings + 
+
+            # Calculate the percentage of savings
+            avg_savings_pct = (total_reserved_savings / (total_reserved_savings +
                              (total_monthly_cost - total_reserved_savings)) * 100) \
                             if (total_reserved_savings + (total_monthly_cost - total_reserved_savings)) > 0 else 0
 
             print(f"\n{colorize('📊  SUMMARY OF POTENTIAL SAVINGS', Colors.TEXT_BOLD + Colors.BOLD)}")
             print(f"{colorize('├─ ', Colors.SECONDARY)}{colorize('Total On-Demand Instances:', Colors.TEXT)} "
                   f"{colorize(str(total_instances), Colors.TEXT_BOLD)}")
-                  
+
             monthly_ondemand = total_reserved_savings + (total_monthly_cost - total_reserved_savings)
             print(f"{colorize('├─ ', Colors.SECONDARY)}{colorize('Monthly On-Demand Cost:', Colors.TEXT)} "
                   f"{colorize(f'${monthly_ondemand:,.2f}', Colors.TEXT_BOLD)}")
-                  
+
             monthly_reserved = total_monthly_cost - total_reserved_savings
             print(f"{colorize('├─ ', Colors.SECONDARY)}{colorize('Monthly Reserved Cost:', Colors.TEXT)} "
                   f"{colorize(f'${monthly_reserved:,.2f}', Colors.TEXT_BOLD)}")
-                  
+
             print(f"{colorize('├─ ', Colors.SECONDARY)}{colorize('Total Monthly Savings:', Colors.TEXT)} "
                   f"💵 {colorize(f'${total_reserved_savings:,.2f}', Colors.SUCCESS + Colors.BOLD)} "
                   f"{colorize(f'({avg_savings_pct:.1f}%)', Colors.SUCCESS)}")
-            
+
             print(f"{colorize('└─ ', Colors.SECONDARY)}{colorize('Annual Savings:', Colors.TEXT)} "
                   f"🏦 {colorize(f'${total_reserved_savings * 12:,.2f}', Colors.SUCCESS + Colors.BOLD)}")
 
@@ -298,17 +298,17 @@ class EC2CostCalculator:
             SUCCESS = '\033[38;5;34m' if use_colors else ''  # Soft green
             WARNING = '\033[38;5;208m' if use_colors else ''  # Orange
             DANGER = '\033[38;5;196m' if use_colors else ''  # Red
-            
+
             # Text colors
             TEXT = '\033[38;5;250m' if use_colors else ''  # Light gray
             TEXT_BOLD = '\033[1;38;5;255m' if use_colors else ''  # White bold
             TEXT_MUTED = '\033[38;5;240m' if use_colors else ''  # Dark gray
-            
+
             # Utility
             RESET = '\033[0m' if use_colors else ''
             BOLD = '\033[1m' if use_colors else ''
             UNDERLINE = '\033[4m' if use_colors else ''
-            
+
             # Aliases for compatibility
             HEADER = PRIMARY
             BLUE = PRIMARY
@@ -343,7 +343,7 @@ class EC2CostCalculator:
                 # Determine color based on instance state
                 state_color = Colors.SUCCESS if instance['State'].lower() == 'running' else \
                              Colors.WARNING if instance['State'].lower() == 'stopped' else Colors.TEXT
-                
+
                 # Determine color based on pricing model
                 pricing_color = {
                     'On-Demand': Colors.TEXT,
@@ -384,20 +384,30 @@ class EC2CostCalculator:
             ondemand_count = sum(v.get('on-demand', 0) for v in summary['instance_types'].values())
             reserved_count = sum(v.get('reserved', 0) for v in summary['instance_types'].values())
             spot_count = sum(v.get('spot', 0) for v in summary['instance_types'].values())
-            
+
             print(f"\n{colorize('INSTANCE COUNT', Colors.TEXT_BOLD + Colors.UNDERLINE)}")
             print(f"{colorize('├─ ', Colors.SECONDARY)}{colorize('Total:', Colors.TEXT)} "
                   f"{colorize(str(summary['total_instances']), Colors.TEXT_BOLD)}")
             print(f"{colorize('├─ ', Colors.SECONDARY)}{colorize('On-Demand:', Colors.TEXT)} "
                   f"{colorize(str(ondemand_count), Colors.TEXT_BOLD)}")
 
+        # Monthly projection
+        monthly_total = summary['total_monthly_cost']
+        print(f"\n{colorize('MONTHLY PROJECTION', Colors.TEXT_BOLD + Colors.UNDERLINE)}")
+        print(f"{colorize('├─ ', Colors.SECONDARY)}{colorize('Total:', Colors.TEXT_BOLD)} "
+              f"{colorize(f'${monthly_total:,.2f}', Colors.TEXT_BOLD)}")
+
+        if summary.get('total_ondemand_cost', 0) > 0:
+            ondemand_monthly = summary['total_ondemand_cost']
+            print(f"{colorize('└─ ', Colors.SECONDARY)}{colorize('On-Demand Equivalent:', Colors.TEXT)} "
+                  f"{colorize(f'${ondemand_monthly:,.2f}', Colors.TEXT)}")
+
         # Annual projection
         print(f"\n{colorize('ANNUAL PROJECTION', Colors.TEXT_BOLD + Colors.UNDERLINE)}")
-        
         annual_total = summary['total_monthly_cost'] * 12
         print(f"{colorize('├─ ', Colors.SECONDARY)}{colorize('Total:', Colors.TEXT_BOLD)} "
               f"{colorize(f'${annual_total:,.2f}', Colors.TEXT_BOLD)}")
-        
+
         if summary.get('total_ondemand_cost', 0) > 0:
             ondemand_annual = summary['total_ondemand_cost'] * 12
             print(f"{colorize('└─ ', Colors.SECONDARY)}{colorize('On-Demand Equivalent:', Colors.TEXT)} "
@@ -413,7 +423,7 @@ class EC2CostCalculator:
                 # Add a separator between instance types
                 if table_data:
                     table_data.append(['─'*12, '─'*20, '─'*6, '─'*10, '─'*12, '─'*12])
-                
+
                 for lifecycle in ['on-demand', 'reserved', 'spot']:
                     count = data.get(lifecycle, 0)
                     if count > 0:
@@ -426,7 +436,7 @@ class EC2CostCalculator:
                             'reserved': '🔒 Reserved (40% off)',
                             'spot': '✨ Spot (30% off)'
                         }.get(lifecycle, lifecycle.upper())
-                        
+
                         # Color based on lifecycle
                         lifecycle_color = {
                             'on-demand': Colors.TEXT,
@@ -448,7 +458,7 @@ class EC2CostCalculator:
                     savings_pct = (data['savings'] / data['ondemand_equivalent'] * 100) \
                                 if data['ondemand_equivalent'] > 0 else 0
                     savings_emoji = "💰" if savings_pct > 15 else "📉"
-                    
+
                     table_data.append([
                         '',
                         colorize(f"{savings_emoji} Savings ({savings_pct:.1f}%)", Colors.SUCCESS),
@@ -475,9 +485,9 @@ class EC2CostCalculator:
         print(f"{colorize('•', Colors.SECONDARY)} Annual costs are based on 8,760 hours per year.")
         print(f"{colorize('•', Colors.SECONDARY)} Reserved instances: 1-year no upfront (40% off on-demand).")
         print(f"{colorize('•', Colors.SECONDARY)} Spot instances: ~30% savings over on-demand pricing.")
-        
+
         if show_reserved_savings:
             print(f"{colorize('•', Colors.SECONDARY)} {colorize('Tip:', Colors.TEXT_BOLD)} Consider 3-year terms "
                   f"for additional savings ({colorize('up to 60% off', Colors.SUCCESS)}).")
-        
+
         print(colorize('='*60, Colors.SECONDARY))
