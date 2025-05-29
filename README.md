@@ -203,29 +203,85 @@ pytest --cov=ec2_finops tests/
 python setup.py sdist bdist_wheel
 ```
 
-## Contributing
+# AWS FinOps CLI
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+A command-line tool for analyzing and optimizing AWS EC2 costs with support for Reserved Instances analysis.
 
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
+## ✨ Features
 
-## License
+- **Cost Analysis**: Get detailed cost breakdown by instance type and lifecycle
+- **Reserved Instances**: Identify potential savings from Reserved Instances
+- **Cost Optimization**: Get recommendations for cost optimization
+- **Interactive Interface**: Colorful and user-friendly CLI output
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## Acknowledgments
-
-- Built with [Click](https://click.palletsprojects.com/) for the CLI interface
-- Uses [Boto3](https://boto3.amazonaws.com/v1/documentation/api/latest/index.html) for AWS interactions
-- Table formatting powered by [Tabulate](https://github.com/astanin/python-tabulate)
-
-## Quick Start
+## 🚀 Quick Start
 
 ### Prerequisites
+
+- Python 3.8+
+- AWS credentials configured with appropriate permissions
+- Required packages: `boto3`, `click`, `tabulate`
+
+### Installation
+
+```bash
+# Clone the repository
+git clone https://github.com/yourusername/finops-cli.git
+cd finops-cli
+
+# Install dependencies
+pip install -r requirements.txt
+```
+
+### Usage
+
+```bash
+# Show help
+python -m cli.finops_cli --help
+
+# Analyze costs for all regions
+python -m cli.finops_cli analyze-costs
+
+# Analyze costs for a specific region
+python -m cli.finops_cli analyze-costs --region us-west-2
+
+# Show detailed cost breakdown
+python -m cli.finops_cli analyze-costs --detailed
+```
+
+## 📊 Example Output
+
+```
+💰  EC2 COST ANALYSIS - us-east-1  💰
+========================================
+
+INSTANCE TYPE   COUNT   MONTHLY COST   ANNUAL COST   
+t3.medium       5       $150.00        $1,800.00     
+m5.large        3       $210.00        $2,520.00     
+
+💡  TOTAL MONTHLY COST: $360.00
+💡  POTENTIAL ANNUAL SAVINGS: $1,200.00 (28%)
+```
+
+## 🤝 Contributing
+
+Contributions are welcome! Please open an issue or submit a PR.
+
+1. Fork the repository
+2. Create your feature branch
+3. Commit your changes
+4. Push to the branch
+5. Open a Pull Request
+
+## 📄 License
+
+MIT - See [LICENSE](LICENSE) for details.
+
+## 🙏 Acknowledgments
+
+- [Click](https://click.palletsprojects.com/) - CLI framework
+- [Boto3](https://boto3.amazonaws.com/) - AWS SDK
+- [Tabulate](https://github.com/astanin/python-tabulate) - Table formatting
 
 1. **AWS Credentials**: Ensure you have AWS credentials configured. You can use:
    - AWS CLI profiles: `aws configure`
