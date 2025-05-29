@@ -8,6 +8,7 @@ FinOps CLI is a command-line tool for analyzing and optimizing costs.
 - *Reserved Instances*: Identify potential savings from Reserved Instances
 - *Cost Optimization*: Get recommendations for cost optimization
 - *Interactive Interface*: Colorful and user-friendly CLI output
+- *Export*: Export cost analysis to CSV
 
 ## 🛠️ AWS Configuration
 
@@ -58,6 +59,11 @@ finops analyze --region eu-west-1
 ### Estimate Reserved Instance savings
 ```bash
 finops analyze --region eu-west-1 --show-reserved-savings
+```
+
+### Generate CSV report
+```bash
+finops export ec2-savings --region eu-west-1 --output savings.csv
 ```
 
 ## 🤝 Contributing

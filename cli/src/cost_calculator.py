@@ -1,4 +1,7 @@
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional
+import csv
+from pathlib import Path
+from datetime import datetime
 from cli.src.pricing import EC2Pricing
 from cli.src.ec2_inventory import EC2Inventory
 from tabulate import tabulate
@@ -277,9 +280,236 @@ class EC2CostCalculator:
                   f"{colorize('   →', Colors.SECONDARY)} {colorize('Tip:', Colors.TEXT_BOLD)} Consider 3-year terms for additional savings "
                   f"({colorize('up to 60% off', Colors.SUCCESS)}).")
         else:
-            print(f"\n{colorize('ℹ️  No On-Demand instances found for Reserved Instance analysis.', Colors.WARNING)}")
+            print(f"\n{colorize('Note: Costs are estimates based on list prices and do not include taxes or additional AWS charges.', Colors.TEXT_MUTED)}")
 
-        print(colorize("="*60, Colors.SECONDARY))
+    def get_instances_data(self) -> List[Dict[str, Any]]:
+        """Get instance data in a format suitable for CSV export.
+
+        Returns:
+            List of dictionaries containing instance data with the following fields:
+            - instance_id: ID of the instance
+            - name: Name tag of the instance
+            - instance_type: Type of the instance
+            - pricing_model: Pricing model (ON-DEMAND, SPOT, etc.)
+            - state: Current state of the instance
+            - hourly_rate: Hourly cost rate
+            - monthly_cost: Estimated monthly cost
+            - annual_cost: Estimated annual cost
+        """
+        instances = self.inventory.get_all_instances()
+        result = []
+
+        for instance in instances:
+            if instance.get('State') != 'running':
+                continue
+
+            instance_type = instance.get('InstanceType', 'N/A')
+            lifecycle = instance.get('InstanceLifecycle', 'on-demand')
+            hourly_price = self._get_instance_pricing(instance_type, lifecycle)
+            monthly_cost = hourly_price * 730
+            annual_cost = hourly_price * 8760
+
+            instance_info = {
+                'instance_id': instance.get('InstanceId', 'N/A'),
+                'name': instance.get('Tags', {}).get('Name', 'N/A'),
+                'instance_type': instance_type,
+                'pricing_model': str(lifecycle).upper(),
+                'state': instance.get('State', 'N/A'),
+                'hourly_rate': f"${hourly_price:.4f}",
+                'monthly_cost': f"${monthly_cost:.2f}",
+                'annual_cost': f"${annual_cost:.2f}"
+            }
+            result.append(instance_info)
+
+        return result
+
+    def get_costs_data(self) -> List[Dict[str, Any]]:
+        """Get cost summary data in a format suitable for CSV export.
+
+        Returns:
+            List of dictionaries containing cost data with the following fields:
+            - instance_type: Type of the instance
+            - pricing_model: Pricing model (ON-DEMAND, RESERVED, SPOT)
+            - count: Number of instances
+            - hourly_rate: Cost per hour
+            - monthly_cost: Estimated monthly cost
+            - annual_cost: Estimated annual cost
+        """
+        summary = self.get_cost_summary()
+        result = []
+
+        for instance_type, data in summary.get('instance_types', {}).items():
+            # Only include non-zero counts
+            if data.get('on-demand', 0) > 0:
+                result.append({
+                    'instance_type': instance_type,
+                    'pricing_model': 'ON-DEMAND',
+                    'count': data.get('on-demand', 0),
+                    'hourly_rate': f"${data.get('hourly_price', 0):.4f}",
+                    'monthly_cost': f"${data.get('monthly_cost', 0):.2f}",
+                    'annual_cost': f"${data.get('monthly_cost', 0) * 12:.2f}"
+                })
+                
+            if data.get('reserved', 0) > 0:
+                result.append({
+                    'instance_type': instance_type,
+                    'pricing_model': 'RESERVED',
+                    'count': data.get('reserved', 0),
+                    'hourly_rate': f"${data.get('hourly_price', 0) * 0.6:.4f}",  # 40% off for reserved
+                    'monthly_cost': f"${data.get('monthly_cost', 0) * 0.6:.2f}",
+                    'annual_cost': f"${data.get('monthly_cost', 0) * 12 * 0.6:.2f}"
+                })
+                
+            if data.get('spot', 0) > 0:
+                result.append({
+                    'instance_type': instance_type,
+                    'pricing_model': 'SPOT',
+                    'count': data.get('spot', 0),
+                    'hourly_rate': f"${data.get('hourly_price', 0) * 0.7:.4f}",  # 30% off for spot
+                    'monthly_cost': f"${data.get('monthly_cost', 0) * 0.7:.2f}",
+                    'annual_cost': f"${data.get('monthly_cost', 0) * 12 * 0.7:.2f}"
+                })
+
+        return result
+
+    def get_savings_data(self) -> List[Dict[str, Any]]:
+        """Get potential savings analysis data in a format suitable for CSV export.
+
+        Returns:
+            List of dictionaries containing savings data with the following fields:
+            - instance_type: Type of the instance
+            - current_pricing: Current pricing model (ON-DEMAND, RESERVED, SPOT)
+            - recommended_pricing: Recommended pricing model for savings
+            - instance_count: Number of instances
+            - current_monthly_cost: Current monthly cost
+            - potential_monthly_cost: Potential monthly cost after optimization
+            - monthly_savings: Potential monthly savings
+            - annual_savings: Potential annual savings
+            - savings_percentage: Percentage of savings
+        """
+        summary = self.get_cost_summary()
+        result = []
+
+        for instance_type, data in summary.get('instance_types', {}).items():
+            on_demand_count = data.get('on-demand', 0)
+            reserved_count = data.get('reserved', 0)
+            spot_count = data.get('spot', 0)
+            hourly_price = data.get('hourly_price', 0)
+            monthly_cost = data.get('monthly_cost', 0)
+            
+            # Check for potential savings from On-Demand to Reserved
+            if on_demand_count > 0:
+                current_cost = monthly_cost
+                potential_cost = monthly_cost * 0.6  # 40% off for reserved
+                savings = current_cost - potential_cost
+                
+                if savings > 0:
+                    result.append({
+                        'instance_type': instance_type,
+                        'current_pricing': 'ON-DEMAND',
+                        'recommended_pricing': 'RESERVED',
+                        'instance_count': on_demand_count,
+                        'current_monthly_cost': f"${current_cost:.2f}",
+                        'potential_monthly_cost': f"${potential_cost:.2f}",
+                        'monthly_savings': f"${savings:.2f}",
+                        'annual_savings': f"${savings * 12:.2f}",
+                        'savings_percentage': '40%'
+                    })
+            
+            # Check for potential savings from On-Demand to Spot (if applicable)
+            if on_demand_count > 0 and spot_count > 0:
+                current_cost = monthly_cost
+                potential_cost = monthly_cost * 0.7  # 30% off for spot
+                savings = current_cost - potential_cost
+                
+                if savings > 0:
+                    result.append({
+                        'instance_type': instance_type,
+                        'current_pricing': 'ON-DEMAND',
+                        'recommended_pricing': 'SPOT',
+                        'instance_count': on_demand_count,
+                        'current_monthly_cost': f"${current_cost:.2f}",
+                        'potential_monthly_cost': f"${potential_cost:.2f}",
+                        'monthly_savings': f"${savings:.2f}",
+                        'annual_savings': f"${savings * 12:.2f}",
+                        'savings_percentage': '30%'
+                    })
+
+        return result
+
+    def export_to_csv(self, data: List[Dict[str, Any]], output_file: str) -> str:
+        """Export data to a CSV file.
+
+        Args:
+            data: List of dictionaries containing data to export
+            output_file: Path to the output CSV file
+
+        Returns:
+            str: Path to the generated CSV file
+        """
+        # Ensure the output directory exists
+        output_path = Path(output_file)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+
+        # Get fieldnames from data or use an empty list
+        fieldnames = list(data[0].keys()) if data else []
+
+        # Write data to CSV
+        with open(output_path, 'w', newline='', encoding='utf-8') as csvfile:
+            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+            writer.writeheader()
+            if data:
+                writer.writerows(data)
+
+        return str(output_path.absolute())
+
+    def export_instances_to_csv(self, output_file: Optional[str] = None) -> str:
+        """Export instance data to CSV.
+
+        Args:
+            output_file: Path to the output CSV file. If not provided, a default name will be used.
+
+        Returns:
+            str: Path to the generated CSV file
+        """
+        if output_file is None:
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            output_file = f"ec2_instances_{self.region}_{timestamp}.csv"
+
+        instances_data = self.get_instances_data()
+        return self.export_to_csv(instances_data, output_file)
+
+    def export_costs_to_csv(self, output_file: Optional[str] = None) -> str:
+        """Export cost data to CSV.
+
+        Args:
+            output_file: Path to the output CSV file. If not provided, a default name will be used.
+
+        Returns:
+            str: Path to the generated CSV file
+        """
+        if output_file is None:
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            output_file = f"ec2_costs_{self.region}_{timestamp}.csv"
+
+        costs_data = self.get_costs_data()
+        return self.export_to_csv(costs_data, output_file)
+
+    def export_savings_to_csv(self, output_file: Optional[str] = None) -> str:
+        """Export savings analysis data to CSV.
+
+        Args:
+            output_file: Path to the output CSV file. If not provided, a default name will be used.
+
+        Returns:
+            str: Path to the generated CSV file
+        """
+        if output_file is None:
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            output_file = f"ec2_savings_{self.region}_{timestamp}.csv"
+
+        savings_data = self.get_savings_data()
+        return self.export_to_csv(savings_data, output_file)
 
     def print_cost_report(self, detailed: bool = True, show_reserved_savings: bool = False, 
                         use_colors: bool = True) -> None:
