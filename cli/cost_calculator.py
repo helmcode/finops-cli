@@ -1,56 +1,23 @@
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any, Optional, Tuple, Union
 import csv
 import logging
 import os
 import sys
-from pathlib import Path
 from datetime import datetime
+from decimal import Decimal
+from tabulate import tabulate
 
 # Importaciones absolutas
 from cli.services.aws.pricing import PricingService
 from cli.services.aws.ec2 import EC2Service
-from cli.models.ec2 import InstanceLifecycle
+from cli.models.ec2 import EC2Instance, InstanceLifecycle
 from cli.models.pricing import OperatingSystem, Tenancy, CapacityStatus
-from tabulate import tabulate
+from cli.ui.colors import Colors
 
 logger = logging.getLogger(__name__)
 
 class EC2CostCalculator:
     """Class to calculate EC2 instance costs."""
-    
-    class Colors:
-        """ANSI color codes for console output."""
-        PRIMARY = '\033[38;5;39m'  # Soft blue
-        SECONDARY = '\033[38;5;247m'  # Medium gray
-        SUCCESS = '\033[38;5;34m'  # Soft green
-        WARNING = '\033[38;5;208m'  # Orange
-        DANGER = '\033[38;5;196m'  # Red
-        TEXT = '\033[38;5;250m'  # Light gray
-        TEXT_BOLD = '\033[1;38;5;255m'  # White bold
-        TEXT_MUTED = '\033[38;5;240m'  # Dark gray
-        RESET = '\033[0m'
-        BOLD = '\033[1m'
-        UNDERLINE = '\033[4m'
-        HEADER = PRIMARY
-        BLUE = PRIMARY
-        CYAN = '\033[38;5;44m'
-        GREEN = SUCCESS
-        FAIL = DANGER
-        ENDC = RESET
-        
-        @staticmethod
-        def colorize(text: str, color: str, use_colors: bool = True) -> str:
-            """Apply color to text if use_colors is True.
-            
-            Args:
-                text: Text to colorize
-                color: Color code to apply
-                use_colors: Whether to apply colors
-                
-            Returns:
-                Colored text if use_colors is True, else original text
-            """
-            return f"{color}{text}{EC2CostCalculator.Colors.ENDC}" if use_colors else text
 
     def __init__(self, region: str = 'us-east-1', profile_name: Optional[str] = None):
         """Initialize the cost calculator.
@@ -222,8 +189,6 @@ class EC2CostCalculator:
             summary: The cost summary dictionary from get_cost_summary()
             use_colors: Whether to use ANSI color codes in the output
         """
-        # Use the Colors class for consistent coloring
-        Colors = self.Colors
         
         def colorize(text: str, color: str) -> str:
             """Apply color to text if use_colors is True."""
@@ -559,8 +524,6 @@ class EC2CostCalculator:
             show_reserved_savings: Whether to show potential savings from Reserved Instances
             use_colors: Whether to use ANSI color codes in the output
         """
-        # Use the Colors class for consistent coloring
-        Colors = self.Colors
         
         def colorize(text: str, color: str) -> str:
             """Apply color to text if use_colors is True."""
