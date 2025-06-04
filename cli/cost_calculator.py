@@ -5,14 +5,22 @@ import os
 import sys
 from datetime import datetime
 from decimal import Decimal
-from tabulate import tabulate
+from pathlib import Path
 
-# Importaciones absolutas
 from cli.services.aws.pricing import PricingService
 from cli.services.aws.ec2 import EC2Service
-from cli.models.ec2 import EC2Instance, InstanceLifecycle
-from cli.models.pricing import OperatingSystem, Tenancy, CapacityStatus
-from cli.ui.colors import Colors
+from cli.ui import EC2CostReporter, Colors
+from cli.models import (
+    EC2Instance,
+    InstanceLifecycle,
+    InstanceCost,
+    InstanceTypeCosts,
+    CostSummary,
+    SavingsOpportunity,
+    OperatingSystem,
+    Tenancy,
+    CapacityStatus
+)
 
 logger = logging.getLogger(__name__)
 
@@ -112,24 +120,17 @@ class EC2CostCalculator:
 
         return result
 
-    def get_cost_summary(self) -> Dict[str, Any]:
+    def get_cost_summary(self) -> CostSummary:
         """Get a summary of EC2 costs by instance type and lifecycle.
 
         Returns:
-            Dictionary with cost summary information including breakdown by lifecycle
+            CostSummary: Object containing cost summary information including breakdown by lifecycle
         """
         instance_usage = self.inventory.get_instance_types_usage()
         logger.debug("Instance usage summary: %s", instance_usage)
-        summary = {
-            'total_instances': 0,
-            'total_monthly_cost': 0.0,
-            'total_ondemand_cost': 0.0,  # Cost if all instances were on-demand
-            'total_reserved_cost': 0.0,
-            'total_spot_cost': 0.0,
-            'monthly_savings': 0.0,
-            'instance_types': {}
-        }
-
+        
+        summary = CostSummary()
+        summary.instance_costs = {}
 
         for instance_type, data in instance_usage.items():
             # Skip if no running instances of this type
@@ -140,151 +141,71 @@ class EC2CostCalculator:
             ondemand_hourly = self.pricing.get_ec2_ondemand_price(instance_type)
 
             if ondemand_hourly is None:
-                print(f"Warning: Could not get price for instance type {instance_type}")
+                logger.warning("Could not get price for instance type %s", instance_type)
                 continue
 
+            # Convert to Decimal for precise calculations
+            ondemand_hourly = Decimal(str(ondemand_hourly))
+            
             # Calculate costs by pricing model
-            ondemand_monthly = ondemand_hourly * 730
-            reserved_hourly = ondemand_hourly * 0.6  # 40% off
-            spot_hourly = ondemand_hourly * 0.7      # 30% off
+            ondemand_monthly = ondemand_hourly * Decimal('730')  # Hours in a month
+            reserved_hourly = ondemand_hourly * Decimal('0.6')  # 40% off
+            spot_hourly = ondemand_hourly * Decimal('0.7')      # 30% off
+
+            # Get instance counts
+            ondemand_count = data.get('on-demand', 0)
+            reserved_count = data.get('reserved', 0)
+            spot_count = data.get('spot', 0)
 
             # Calculate total costs for this instance type
-            total_ondemand_cost = data.get('on-demand', 0) * ondemand_monthly
-            total_reserved_cost = data.get('reserved', 0) * (reserved_hourly * 730)
-            total_spot_cost = data.get('spot', 0) * (spot_hourly * 730)
+            total_ondemand_cost = Decimal(str(ondemand_count)) * ondemand_monthly
+            total_reserved_cost = Decimal(str(reserved_count)) * (reserved_hourly * Decimal('730'))
+            total_spot_cost = Decimal(str(spot_count)) * (spot_hourly * Decimal('730'))
 
             total_monthly_cost = total_ondemand_cost + total_reserved_cost + total_spot_cost
 
             # Calculate what the cost would be if all instances were on-demand
-            total_ondemand_equivalent = data['total'] * ondemand_monthly
+            total_ondemand_equivalent = Decimal(str(data['total'])) * ondemand_monthly
 
             # Calculate savings
             savings = total_ondemand_equivalent - total_monthly_cost
 
-            # Update summary
-            summary['instance_types'][instance_type] = {
-                'total': data['total'],
-                'on-demand': data.get('on-demand', 0),
-                'reserved': data.get('reserved', 0),
-                'spot': data.get('spot', 0),
-                'hourly_price': ondemand_hourly,
-                'monthly_cost': total_monthly_cost,
-                'ondemand_equivalent': total_ondemand_equivalent,
-                'savings': savings
-            }
+            # Create instance type costs
+            instance_costs = InstanceTypeCosts(
+                instance_type=instance_type,
+                total_instances=data['total'],
+                on_demand_count=ondemand_count,
+                reserved_count=reserved_count,
+                spot_count=spot_count,
+                hourly_rate=ondemand_hourly,
+                monthly_cost=total_monthly_cost,
+                annual_cost=total_monthly_cost * Decimal('12'),
+                ondemand_equivalent=total_ondemand_equivalent,
+                savings=savings
+            )
 
-            summary['total_instances'] += data['total']
-            summary['total_monthly_cost'] += total_monthly_cost
-            summary['total_ondemand_cost'] += total_ondemand_equivalent
-            summary['total_reserved_cost'] += total_reserved_cost
-            summary['total_spot_cost'] += total_spot_cost
-            summary['monthly_savings'] += savings
+            # Update summary
+            summary.instance_costs[instance_type] = instance_costs
+            summary.total_instances += data['total']
+            summary.total_monthly_cost += total_monthly_cost
+            summary.total_ondemand_cost += total_ondemand_equivalent
+            summary.total_reserved_cost += total_reserved_cost
+            summary.total_spot_cost += total_spot_cost
+            summary.monthly_savings += savings
 
         return summary
 
-    def _print_reserved_savings_analysis(self, summary: Dict[str, Any], use_colors: bool = True) -> None:
+    def _print_reserved_savings_analysis(self, summary: CostSummary, use_colors: bool = True) -> None:
         """Print an analysis of potential savings from Reserved Instances.
-
+        
+        Note: This method is kept for backward compatibility. Use EC2CostReporter instead.
+        
         Args:
-            summary: The cost summary dictionary from get_cost_summary()
+            summary: The cost summary object from get_cost_summary()
             use_colors: Whether to use ANSI color codes in the output
         """
-        
-        def colorize(text: str, color: str) -> str:
-            """Apply color to text if use_colors is True."""
-            return Colors.colorize(text, color, use_colors)
-
-        # Header with emojis and minimalist style
-        print(f"\n{colorize('='*60, Colors.SECONDARY)}")
-        print(colorize(f"💰  RESERVED INSTANCE SAVINGS ANALYSIS  💰".center(60), Colors.TEXT_BOLD + Colors.BOLD))
-        print(colorize('='*60, Colors.SECONDARY))
-        print(f"\n{colorize('ℹ️  This analysis shows potential savings from converting On-Demand to Reserved Instances', Colors.TEXT)}")
-        print(f"{colorize('   Savings are calculated using the', Colors.TEXT)} {colorize('1-year No Upfront', Colors.TEXT_BOLD)} {colorize('payment option', Colors.TEXT)} "
-              f"({colorize('40% off on-demand', Colors.SUCCESS)})\n")
-
-        total_reserved_savings = 0
-        total_instances = 0
-        instance_data = []
-
-        # Process instance data
-        for instance_type, data in summary['instance_types'].items():
-            ondemand_count = data.get('on-demand', 0)
-            if ondemand_count == 0:
-                continue
-
-            hourly_price = self._get_instance_pricing(instance_type, 'on-demand')
-            reserved_hourly_price = self._get_instance_pricing(instance_type, 'reserved')
-
-            monthly_hours = 730  # 24 hours * 365 days / 12 months
-            total_ondemand_equivalent = hourly_price * ondemand_count * monthly_hours
-            total_reserved_cost = reserved_hourly_price * ondemand_count * monthly_hours
-            reserved_savings = total_ondemand_equivalent - total_reserved_cost
-            total_reserved_savings += reserved_savings
-            total_instances += ondemand_count
-
-            savings_pct = (reserved_savings / total_ondemand_equivalent * 100) if total_ondemand_equivalent > 0 else 0
-            savings_color = Colors.SUCCESS if savings_pct > 20 else Colors.WARNING
-            savings_emoji = "💸" if savings_pct > 20 else "📉"
-
-            instance_data.append([
-                colorize(instance_type, Colors.TEXT_BOLD),
-                ondemand_count,
-                f"${hourly_price:.4f}",
-                f"${reserved_hourly_price:.4f}",
-                f"{savings_emoji} {colorize(f'${reserved_savings:,.2f}', savings_color)}",
-                colorize(f"{savings_pct:.1f}%", savings_color)
-            ])
-
-        # Print table with instance details
-        if instance_data:
-            headers = [
-                colorize("INSTANCE TYPE", Colors.TEXT_MUTED + Colors.UNDERLINE),
-                colorize("COUNT", Colors.TEXT_MUTED + Colors.UNDERLINE),
-                colorize("ON-DEMAND RATE", Colors.TEXT_MUTED + Colors.UNDERLINE),
-                colorize("RESERVED RATE", Colors.TEXT_MUTED + Colors.UNDERLINE),
-                colorize("MONTHLY SAVINGS", Colors.TEXT_MUTED + Colors.UNDERLINE),
-                colorize("SAVINGS %", Colors.TEXT_MUTED + Colors.UNDERLINE)
-            ]
-            print(tabulate(instance_data, headers=headers, tablefmt="simple_grid"))
-
-        # Print total potential savings
-        if total_instances > 0:
-            # Ensure total_monthly_cost is a number, not a string
-            total_monthly_cost = float(summary['total_monthly_cost']) if isinstance(summary['total_monthly_cost'], (int, float)) else 0.0
-
-            # Calculate the percentage of savings
-            avg_savings_pct = (total_reserved_savings / (total_reserved_savings +
-                             (total_monthly_cost - total_reserved_savings)) * 100) \
-                            if (total_reserved_savings + (total_monthly_cost - total_reserved_savings)) > 0 else 0
-
-            print(f"\n{colorize('📊  SUMMARY OF POTENTIAL SAVINGS', Colors.TEXT_BOLD + Colors.BOLD)}")
-            print(f"{colorize('├─ ', Colors.SECONDARY)}{colorize('Total On-Demand Instances:', Colors.TEXT)} "
-                  f"{colorize(str(total_instances), Colors.TEXT_BOLD)}")
-
-            monthly_ondemand = total_reserved_savings + (total_monthly_cost - total_reserved_savings)
-            print(f"{colorize('├─ ', Colors.SECONDARY)}{colorize('Monthly On-Demand Cost:', Colors.TEXT)} "
-                  f"{colorize(f'${monthly_ondemand:,.2f}', Colors.TEXT_BOLD)}")
-
-            monthly_reserved = total_monthly_cost - total_reserved_savings
-            print(f"{colorize('├─ ', Colors.SECONDARY)}{colorize('Monthly Reserved Cost:', Colors.TEXT)} "
-                  f"{colorize(f'${monthly_reserved:,.2f}', Colors.TEXT_BOLD)}")
-
-            print(f"{colorize('├─ ', Colors.SECONDARY)}{colorize('Total Monthly Savings:', Colors.TEXT)} "
-                  f"💵 {colorize(f'${total_reserved_savings:,.2f}', Colors.SUCCESS + Colors.BOLD)} "
-                  f"{colorize(f'({avg_savings_pct:.1f}%)', Colors.SUCCESS)}")
-
-            print(f"{colorize('└─ ', Colors.SECONDARY)}{colorize('Annual Savings:', Colors.TEXT)} "
-                  f"🏦 {colorize(f'${total_reserved_savings * 12:,.2f}', Colors.SUCCESS + Colors.BOLD)}")
-
-            print(f"\n{colorize('💡  RECOMMENDATION', Colors.TEXT_BOLD + Colors.BOLD)}")
-            print(f"Consider converting {colorize('On-Demand', Colors.TEXT_BOLD)} instances to "
-                  f"{colorize('Reserved Instances', Colors.PRIMARY)} to save approximately "
-                  f"{colorize(f'${total_reserved_savings:,.2f}', Colors.SUCCESS)} per month "
-                  f"({colorize(f'{avg_savings_pct:.1f}%', Colors.SUCCESS)}).\n"
-                  f"{colorize('   →', Colors.SECONDARY)} {colorize('Tip:', Colors.TEXT_BOLD)} Consider 3-year terms for additional savings "
-                  f"({colorize('up to 60% off', Colors.SUCCESS)}).")
-        else:
-            print(f"\n{colorize('Note: Costs are estimates based on list prices and do not include taxes or additional AWS charges.', Colors.TEXT_MUTED)}")
+        reporter = EC2CostReporter(region=self.region, use_colors=use_colors)
+        reporter.print_reserved_savings_analysis(summary)
 
     def get_instances_data(self) -> List[Dict[str, Any]]:
         """Get instance data in a format suitable for CSV export.
@@ -309,19 +230,25 @@ class EC2CostCalculator:
 
             instance_type = instance.get('InstanceType', 'N/A')
             lifecycle = instance.get('InstanceLifecycle', 'on-demand')
-            hourly_price = self._get_instance_pricing(instance_type, lifecycle)
-            monthly_cost = hourly_price * 730
-            annual_cost = hourly_price * 8760
+            
+            # Convert lifecycle string to InstanceLifecycle enum
+            lifecycle_enum = InstanceLifecycle.ON_DEMAND
+            if isinstance(lifecycle, str):
+                lifecycle_enum = InstanceLifecycle[lifecycle.upper()] if hasattr(InstanceLifecycle, lifecycle.upper()) else InstanceLifecycle.ON_DEMAND
+            
+            hourly_price = self._get_instance_pricing(instance_type, lifecycle_enum)
+            monthly_cost = float(hourly_price) * 730.0  # 730 hours in a month
+            annual_cost = float(hourly_price) * 8760.0  # 8760 hours in a year
 
             instance_info = {
                 'instance_id': instance.get('InstanceId', 'N/A'),
                 'name': instance.get('Tags', {}).get('Name', 'N/A'),
                 'instance_type': instance_type,
-                'pricing_model': str(lifecycle).upper(),
+                'pricing_model': str(lifecycle_enum.value).upper(),
                 'state': instance.get('State', 'N/A'),
-                'hourly_rate': f"${hourly_price:.4f}",
-                'monthly_cost': f"${monthly_cost:.2f}",
-                'annual_cost': f"${annual_cost:.2f}"
+                'hourly_rate': f"${float(hourly_price):.4f}",
+                'monthly_cost': f"${monthly_cost:,.2f}",
+                'annual_cost': f"${annual_cost:,.2f}"
             }
             result.append(instance_info)
 
@@ -342,36 +269,44 @@ class EC2CostCalculator:
         summary = self.get_cost_summary()
         result = []
 
-        for instance_type, data in summary.get('instance_types', {}).items():
+        for instance_type, instance_cost in summary.instance_costs.items():
             # Only include non-zero counts
-            if data.get('on-demand', 0) > 0:
+            if instance_cost.on_demand_count > 0:
                 result.append({
                     'instance_type': instance_type,
                     'pricing_model': 'ON-DEMAND',
-                    'count': data.get('on-demand', 0),
-                    'hourly_rate': f"${data.get('hourly_price', 0):.4f}",
-                    'monthly_cost': f"${data.get('monthly_cost', 0):.2f}",
-                    'annual_cost': f"${data.get('monthly_cost', 0) * 12:.2f}"
+                    'count': instance_cost.on_demand_count,
+                    'hourly_rate': f"${float(instance_cost.hourly_rate):.4f}",
+                    'monthly_cost': f"${float(instance_cost.monthly_cost):.2f}",
+                    'annual_cost': f"${float(instance_cost.annual_cost):.2f}"
                 })
                 
-            if data.get('reserved', 0) > 0:
+            if instance_cost.reserved_count > 0:
+                reserved_hourly = instance_cost.hourly_rate * Decimal('0.6')  # 40% off for reserved
+                reserved_monthly = instance_cost.monthly_cost * Decimal('0.6')
+                reserved_annual = instance_cost.annual_cost * Decimal('0.6')
+                
                 result.append({
                     'instance_type': instance_type,
                     'pricing_model': 'RESERVED',
-                    'count': data.get('reserved', 0),
-                    'hourly_rate': f"${data.get('hourly_price', 0) * 0.6:.4f}",  # 40% off for reserved
-                    'monthly_cost': f"${data.get('monthly_cost', 0) * 0.6:.2f}",
-                    'annual_cost': f"${data.get('monthly_cost', 0) * 12 * 0.6:.2f}"
+                    'count': instance_cost.reserved_count,
+                    'hourly_rate': f"${float(reserved_hourly):.4f}",
+                    'monthly_cost': f"${float(reserved_monthly):.2f}",
+                    'annual_cost': f"${float(reserved_annual):.2f}"
                 })
                 
-            if data.get('spot', 0) > 0:
+            if instance_cost.spot_count > 0:
+                spot_hourly = instance_cost.hourly_rate * Decimal('0.7')  # 30% off for spot
+                spot_monthly = instance_cost.monthly_cost * Decimal('0.7')
+                spot_annual = instance_cost.annual_cost * Decimal('0.7')
+                
                 result.append({
                     'instance_type': instance_type,
                     'pricing_model': 'SPOT',
-                    'count': data.get('spot', 0),
-                    'hourly_rate': f"${data.get('hourly_price', 0) * 0.7:.4f}",  # 30% off for spot
-                    'monthly_cost': f"${data.get('monthly_cost', 0) * 0.7:.2f}",
-                    'annual_cost': f"${data.get('monthly_cost', 0) * 12 * 0.7:.2f}"
+                    'count': instance_cost.spot_count,
+                    'hourly_rate': f"${float(spot_hourly):.4f}",
+                    'monthly_cost': f"${float(spot_monthly):.2f}",
+                    'annual_cost': f"${float(spot_annual):.2f}"
                 })
 
         return result
@@ -394,17 +329,11 @@ class EC2CostCalculator:
         summary = self.get_cost_summary()
         result = []
 
-        for instance_type, data in summary.get('instance_types', {}).items():
-            on_demand_count = data.get('on-demand', 0)
-            reserved_count = data.get('reserved', 0)
-            spot_count = data.get('spot', 0)
-            hourly_price = data.get('hourly_price', 0)
-            monthly_cost = data.get('monthly_cost', 0)
-            
+        for instance_type, instance_cost in summary.instance_costs.items():
             # Check for potential savings from On-Demand to Reserved
-            if on_demand_count > 0:
-                current_cost = monthly_cost
-                potential_cost = monthly_cost * 0.6  # 40% off for reserved
+            if instance_cost.on_demand_count > 0 and instance_cost.on_demand_count > instance_cost.reserved_count:
+                current_cost = float(instance_cost.monthly_cost)
+                potential_cost = float(instance_cost.monthly_cost * Decimal('0.6'))  # 40% off for reserved
                 savings = current_cost - potential_cost
                 
                 if savings > 0:
@@ -412,18 +341,18 @@ class EC2CostCalculator:
                         'instance_type': instance_type,
                         'current_pricing': 'ON-DEMAND',
                         'recommended_pricing': 'RESERVED',
-                        'instance_count': on_demand_count,
-                        'current_monthly_cost': f"${current_cost:.2f}",
-                        'potential_monthly_cost': f"${potential_cost:.2f}",
-                        'monthly_savings': f"${savings:.2f}",
-                        'annual_savings': f"${savings * 12:.2f}",
+                        'instance_count': instance_cost.on_demand_count,
+                        'current_monthly_cost': f"${current_cost:,.2f}",
+                        'potential_monthly_cost': f"${potential_cost:,.2f}",
+                        'monthly_savings': f"${savings:,.2f}",
+                        'annual_savings': f"${savings * 12:,.2f}",
                         'savings_percentage': '40%'
                     })
             
             # Check for potential savings from On-Demand to Spot (if applicable)
-            if on_demand_count > 0 and spot_count > 0:
-                current_cost = monthly_cost
-                potential_cost = monthly_cost * 0.7  # 30% off for spot
+            if instance_cost.on_demand_count > 0 and instance_cost.spot_count > 0:
+                current_cost = float(instance_cost.monthly_cost)
+                potential_cost = float(instance_cost.monthly_cost * Decimal('0.7'))  # 30% off for spot
                 savings = current_cost - potential_cost
                 
                 if savings > 0:
@@ -431,11 +360,11 @@ class EC2CostCalculator:
                         'instance_type': instance_type,
                         'current_pricing': 'ON-DEMAND',
                         'recommended_pricing': 'SPOT',
-                        'instance_count': on_demand_count,
-                        'current_monthly_cost': f"${current_cost:.2f}",
-                        'potential_monthly_cost': f"${potential_cost:.2f}",
-                        'monthly_savings': f"${savings:.2f}",
-                        'annual_savings': f"${savings * 12:.2f}",
+                        'instance_count': instance_cost.on_demand_count,
+                        'current_monthly_cost': f"${current_cost:,.2f}",
+                        'potential_monthly_cost': f"${potential_cost:,.2f}",
+                        'monthly_savings': f"${savings:,.2f}",
+                        'annual_savings': f"${savings * 12:,.2f}",
                         'savings_percentage': '30%'
                     })
 
@@ -515,8 +444,48 @@ class EC2CostCalculator:
         savings_data = self.get_savings_data()
         return self.export_to_csv(savings_data, output_file)
 
+    def _add_instance_cost_row(self, table_data: List[List[Any]], instance_type: str, 
+                             instance_cost: InstanceTypeCosts, lifecycle_str: str, 
+                             count: int, colorize: callable) -> None:
+        """Add a row to the instance cost table.
+        
+        Args:
+            table_data: List to append the row data to
+            instance_type: Type of the instance
+            instance_cost: InstanceTypeCosts object with cost information
+            lifecycle_str: Lifecycle type ('on-demand', 'reserved', 'spot')
+            count: Number of instances
+            colorize: Colorize function to apply colors
+        """
+        lifecycle_map = {
+            'on-demand': (InstanceLifecycle.ON_DEMAND, '🔄 On-Demand', Colors.TEXT),
+            'reserved': (InstanceLifecycle.RESERVED, '🔒 Reserved (40% off)', Colors.SUCCESS),
+            'spot': (InstanceLifecycle.SPOT, '✨ Spot (30% off)', Colors.PRIMARY)
+        }
+        
+        lifecycle_enum, lifecycle_display, lifecycle_color = lifecycle_map.get(
+            lifecycle_str, (None, lifecycle_str.upper(), Colors.TEXT)
+        )
+        
+        # Get the hourly price and convert to Decimal for calculations
+        hourly_price = Decimal(str(self._get_instance_pricing(instance_type, lifecycle_enum)))
+        
+        # Calculate costs using Decimal for precision
+        monthly_cost = hourly_price * Decimal('730') * Decimal(str(count))
+        annual_cost = monthly_cost * Decimal('12')
+        
+        # Convert to float only for display
+        table_data.append([
+            colorize(instance_type, Colors.TEXT_BOLD) if lifecycle_str == 'on-demand' else '',
+            colorize(lifecycle_display, lifecycle_color),
+            count,
+            colorize(f"${float(hourly_price):.4f}", Colors.TEXT_BOLD),
+            colorize(f"${float(monthly_cost):,.2f}", Colors.TEXT_BOLD),
+            colorize(f"${float(annual_cost):,.2f}", Colors.TEXT_BOLD)
+        ])
+
     def print_cost_report(self, detailed: bool = True, show_reserved_savings: bool = False, 
-                        use_colors: bool = True) -> None:
+                         use_colors: bool = True) -> None:
         """Print a formatted cost report to the console.
 
         Args:
@@ -524,186 +493,26 @@ class EC2CostCalculator:
             show_reserved_savings: Whether to show potential savings from Reserved Instances
             use_colors: Whether to use ANSI color codes in the output
         """
-        
-        def colorize(text: str, color: str) -> str:
-            """Apply color to text if use_colors is True."""
-            return Colors.colorize(text, color, use_colors)
-
+        # Get the data
         instances = self.calculate_instance_costs()
         summary = self.get_cost_summary()
-
-        # Print header
-        print(f"\n{colorize('='*60, Colors.SECONDARY)}")
-        print(colorize(f"🛠️  AWS COST ANALYSIS - {self.region.upper()}  🛠️".center(60), 
-                      Colors.TEXT_BOLD + Colors.BOLD))
-        print(colorize('='*60, Colors.SECONDARY))
-
+        
+        # Create and use the reporter
+        reporter = EC2CostReporter(region=self.region, use_colors=use_colors)
+        
+        # Print the report sections
+        reporter._print_header()
+        
+        if summary and summary.instance_costs:
+            if detailed:
+                reporter._print_instance_details(summary.instance_costs)
+            
+            reporter._print_cost_summary(summary)
+            
+            if detailed:
+                reporter._print_cost_breakdown(summary.instance_costs)
+        
         if show_reserved_savings:
-            self._print_reserved_savings_analysis(summary, use_colors=use_colors)
-
-        # Print instance details
-        if detailed and instances:
-            print(f"\n{colorize('='*60, Colors.SECONDARY)}")
-            print(colorize("INSTANCE DETAILS".center(60), Colors.TEXT_BOLD + Colors.UNDERLINE))
-            print(colorize('='*60, Colors.SECONDARY))
-
-            table_data = []
-            for instance in instances:
-                # Determine color based on instance state
-                state_color = Colors.SUCCESS if instance['State'].lower() == 'running' else \
-                             Colors.WARNING if instance['State'].lower() == 'stopped' else Colors.TEXT
-
-                # Determine color based on pricing model
-                pricing_color = {
-                    'On-Demand': Colors.TEXT,
-                    'Reserved': Colors.SUCCESS,
-                    'Spot': Colors.PRIMARY
-                }.get(instance['Lifecycle'], Colors.TEXT)
-
-                table_data.append([
-                    colorize(instance['InstanceId'][:12] + '...', Colors.TEXT_BOLD),
-                    instance['Name'] or '-',
-                    instance['InstanceType'],
-                    colorize(instance['Lifecycle'], pricing_color),
-                    colorize(instance['State'], state_color),
-                    colorize(f"${float(instance['HourlyCost']):.4f}", Colors.TEXT_BOLD),
-                    colorize(f"${float(instance['MonthlyCost']):,.2f}", Colors.TEXT_BOLD),
-                    colorize(f"${float(instance['AnnualCost']):,.2f}", Colors.TEXT_BOLD)
-                ])
-
-            headers = [
-                colorize("INSTANCE ID", Colors.TEXT_MUTED + Colors.UNDERLINE),
-                colorize("NAME", Colors.TEXT_MUTED + Colors.UNDERLINE),
-                colorize("TYPE", Colors.TEXT_MUTED + Colors.UNDERLINE),
-                colorize("PRICING", Colors.TEXT_MUTED + Colors.UNDERLINE),
-                colorize("STATE", Colors.TEXT_MUTED + Colors.UNDERLINE),
-                colorize("HOURLY", Colors.TEXT_MUTED + Colors.UNDERLINE),
-                colorize("MONTHLY", Colors.TEXT_MUTED + Colors.UNDERLINE),
-                colorize("ANNUAL", Colors.TEXT_MUTED + Colors.UNDERLINE)
-            ]
-            print(tabulate(table_data, headers=headers, tablefmt="simple_grid"))
-
-        # Print summary
-        if summary and summary.get('instance_types'):
-            print(f"\n{colorize('='*60, Colors.SECONDARY)}")
-            print(colorize("COST SUMMARY".center(60), Colors.TEXT_BOLD + Colors.UNDERLINE))
-            print(colorize('='*60, Colors.SECONDARY))
-
-            # Instance counts
-            ondemand_count = sum(v.get('on-demand', 0) for v in summary['instance_types'].values())
-            reserved_count = sum(v.get('reserved', 0) for v in summary['instance_types'].values())
-            spot_count = sum(v.get('spot', 0) for v in summary['instance_types'].values())
-
-            print(f"\n{colorize('INSTANCE COUNT', Colors.TEXT_BOLD + Colors.UNDERLINE)}")
-            print(f"{colorize('├─ ', Colors.SECONDARY)}{colorize('Total:', Colors.TEXT)} "
-                  f"{colorize(str(summary['total_instances']), Colors.TEXT_BOLD)}")
-            print(f"{colorize('├─ ', Colors.SECONDARY)}{colorize('On-Demand:', Colors.TEXT)} "
-                  f"{colorize(str(ondemand_count), Colors.TEXT_BOLD)}")
-
-        # Monthly projection
-        monthly_total = summary['total_monthly_cost']
-        print(f"\n{colorize('MONTHLY PROJECTION', Colors.TEXT_BOLD + Colors.UNDERLINE)}")
-        print(f"{colorize('├─ ', Colors.SECONDARY)}{colorize('Total:', Colors.TEXT_BOLD)} "
-              f"{colorize(f'${monthly_total:,.2f}', Colors.TEXT_BOLD)}")
-
-        if summary.get('total_ondemand_cost', 0) > 0:
-            ondemand_monthly = summary['total_ondemand_cost']
-            print(f"{colorize('└─ ', Colors.SECONDARY)}{colorize('On-Demand Equivalent:', Colors.TEXT)} "
-                  f"{colorize(f'${ondemand_monthly:,.2f}', Colors.TEXT)}")
-
-        # Annual projection
-        print(f"\n{colorize('ANNUAL PROJECTION', Colors.TEXT_BOLD + Colors.UNDERLINE)}")
-        annual_total = summary['total_monthly_cost'] * 12
-        print(f"{colorize('├─ ', Colors.SECONDARY)}{colorize('Total:', Colors.TEXT_BOLD)} "
-              f"{colorize(f'${annual_total:,.2f}', Colors.TEXT_BOLD)}")
-
-        if summary.get('total_ondemand_cost', 0) > 0:
-            ondemand_annual = summary['total_ondemand_cost'] * 12
-            print(f"{colorize('└─ ', Colors.SECONDARY)}{colorize('On-Demand Equivalent:', Colors.TEXT)} "
-                  f"{colorize(f'${ondemand_annual:,.2f}', Colors.TEXT)}")
-
-        # Cost breakdown by instance type
-        if detailed:
-            print(f"\n{colorize('COST BREAKDOWN BY INSTANCE TYPE', Colors.TEXT_BOLD + Colors.UNDERLINE)}")
-            print(colorize('─'*60, Colors.SECONDARY))
-
-            table_data = []
-            for instance_type, data in sorted(summary['instance_types'].items()):
-                # Add a separator between instance types
-                if table_data:
-                    table_data.append(['─'*12, '─'*20, '─'*6, '─'*10, '─'*12, '─'*12])
-
-                for lifecycle_str in ['on-demand', 'reserved', 'spot']:
-                    count = data.get(lifecycle_str, 0)
-                    if count > 0:
-                        # Mapear el string del ciclo de vida al valor correcto del enum
-                        lifecycle_map = {
-                            'on-demand': InstanceLifecycle.ON_DEMAND,
-                            'reserved': InstanceLifecycle.RESERVED,
-                            'spot': InstanceLifecycle.SPOT
-                        }
-                        lifecycle_enum = lifecycle_map[lifecycle_str]
-                        hourly_price = self._get_instance_pricing(instance_type, lifecycle_enum)
-                        monthly_cost = hourly_price * 730 * count
-                        annual_cost = monthly_cost * 12
-
-                        lifecycle_display = {
-                            'on-demand': '🔄 On-Demand',
-                            'reserved': '🔒 Reserved (40% off)',
-                            'spot': '✨ Spot (30% off)'
-                        }.get(lifecycle_str, lifecycle_str.upper())
-
-                        # Color based on lifecycle
-                        lifecycle_color = {
-                            'on-demand': Colors.TEXT,
-                            'reserved': Colors.SUCCESS,
-                            'spot': Colors.PRIMARY
-                        }.get(lifecycle_str, Colors.TEXT)
-
-                        table_data.append([
-                            colorize(instance_type, Colors.TEXT_BOLD) if lifecycle_str == 'on-demand' else '',
-                            colorize(lifecycle_display, lifecycle_color),
-                            count,
-                            colorize(f"${hourly_price:.4f}", Colors.TEXT_BOLD),
-                            colorize(f"${monthly_cost:,.2f}", Colors.TEXT_BOLD),
-                            colorize(f"${annual_cost:,.2f}", Colors.TEXT_BOLD)
-                        ])
-
-                # Add savings information if applicable
-                if data.get('savings', 0) > 0 and data.get('ondemand_equivalent', 0) > 0:
-                    savings_pct = (data['savings'] / data['ondemand_equivalent'] * 100) \
-                                if data['ondemand_equivalent'] > 0 else 0
-                    savings_emoji = "💰" if savings_pct > 15 else "📉"
-
-                    table_data.append([
-                        '',
-                        colorize(f"{savings_emoji} Savings ({savings_pct:.1f}%)", Colors.SUCCESS),
-                        '',
-                        '',
-                        colorize(f"-${data['savings']:,.2f}", Colors.SUCCESS + Colors.BOLD),
-                        colorize(f"-${data['savings'] * 12:,.2f}", Colors.SUCCESS + Colors.BOLD)
-                    ])
-
-            headers = [
-                colorize("INSTANCE TYPE", Colors.TEXT_MUTED + Colors.UNDERLINE),
-                colorize("PRICING MODEL", Colors.TEXT_MUTED + Colors.UNDERLINE),
-                colorize("COUNT", Colors.TEXT_MUTED + Colors.UNDERLINE),
-                colorize("RATE/HOUR", Colors.TEXT_MUTED + Colors.UNDERLINE),
-                colorize("MONTHLY", Colors.TEXT_MUTED + Colors.UNDERLINE),
-                colorize("ANNUAL", Colors.TEXT_MUTED + Colors.UNDERLINE)
-            ]
-            print(tabulate(table_data, headers=headers, tablefmt="simple_grid"))
-
-        # Print footer with notes
-        print(f"\n{colorize('NOTES', Colors.TEXT_BOLD + Colors.UNDERLINE)}")
-        print(colorize('─'*60, Colors.SECONDARY))
-        print(f"{colorize('•', Colors.SECONDARY)} Monthly costs are estimates based on 730 hours per month.")
-        print(f"{colorize('•', Colors.SECONDARY)} Annual costs are based on 8,760 hours per year.")
-        print(f"{colorize('•', Colors.SECONDARY)} Reserved instances: 1-year no upfront (40% off on-demand).")
-        print(f"{colorize('•', Colors.SECONDARY)} Spot instances: ~30% savings over on-demand pricing.")
-
-        if show_reserved_savings:
-            print(f"{colorize('•', Colors.SECONDARY)} {colorize('Tip:', Colors.TEXT_BOLD)} Consider 3-year terms "
-                  f"for additional savings ({colorize('up to 60% off', Colors.SUCCESS)}).")
-
-        print(colorize('='*60, Colors.SECONDARY))
+            reporter.print_reserved_savings_analysis(summary)
+                
+        reporter._print_footer()

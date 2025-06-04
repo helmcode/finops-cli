@@ -1,6 +1,6 @@
 """Data models for the FinOps CLI."""
 
-from cli.models.ec2 import EC2Instance, InstanceLifecycle
+from cli.models.ec2 import EC2Instance
 from cli.models.pricing import (
     EC2PriceDimensions,
     EC2PriceInfo,
@@ -9,6 +9,15 @@ from cli.models.pricing import (
     OperatingSystem,
     Tenancy,
     CapacityStatus
+)
+from cli.models.cost_models import (
+    InstanceLifecycle,
+    InstanceCost,
+    InstanceTypeCosts,
+    CostSummary,
+    SavingsOpportunity,
+    InstanceCosts,
+    PricingData
 )
 
 __all__ = [

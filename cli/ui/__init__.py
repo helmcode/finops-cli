@@ -5,5 +5,6 @@ This package contains user interface components like colors, formatting, and dis
 """
 
 from .colors import Colors
+from .reporter import EC2CostReporter
 
-__all__ = ['Colors']
+__all__ = ['Colors', 'EC2CostReporter']
