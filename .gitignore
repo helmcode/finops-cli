@@ -199,3 +199,6 @@ logs/
 # Package files
 *.tar.gz
 *.zip
+
+# AI
+.claude/

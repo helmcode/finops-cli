@@ -1,30 +1,71 @@
 from typing import Dict, List, Any, Optional
 import csv
+import logging
 from pathlib import Path
 from datetime import datetime
+
 from cli.src.pricing import EC2Pricing
-from cli.src.ec2_inventory import EC2Inventory
+from cli.src.services.aws.ec2 import EC2Service
+from cli.src.models.ec2 import InstanceLifecycle
 from tabulate import tabulate
+
+logger = logging.getLogger(__name__)
 
 class EC2CostCalculator:
     """Class to calculate EC2 instance costs."""
+    
+    class Colors:
+        """ANSI color codes for console output."""
+        PRIMARY = '\033[38;5;39m'  # Soft blue
+        SECONDARY = '\033[38;5;247m'  # Medium gray
+        SUCCESS = '\033[38;5;34m'  # Soft green
+        WARNING = '\033[38;5;208m'  # Orange
+        DANGER = '\033[38;5;196m'  # Red
+        TEXT = '\033[38;5;250m'  # Light gray
+        TEXT_BOLD = '\033[1;38;5;255m'  # White bold
+        TEXT_MUTED = '\033[38;5;240m'  # Dark gray
+        RESET = '\033[0m'
+        BOLD = '\033[1m'
+        UNDERLINE = '\033[4m'
+        HEADER = PRIMARY
+        BLUE = PRIMARY
+        CYAN = '\033[38;5;44m'
+        GREEN = SUCCESS
+        FAIL = DANGER
+        ENDC = RESET
+        
+        @staticmethod
+        def colorize(text: str, color: str, use_colors: bool = True) -> str:
+            """Apply color to text if use_colors is True.
+            
+            Args:
+                text: Text to colorize
+                color: Color code to apply
+                use_colors: Whether to apply colors
+                
+            Returns:
+                Colored text if use_colors is True, else original text
+            """
+            return f"{color}{text}{EC2CostCalculator.Colors.ENDC}" if use_colors else text
 
-    def __init__(self, region: str = 'us-east-1'):
+    def __init__(self, region: str = 'us-east-1', profile_name: Optional[str] = None):
         """Initialize the cost calculator.
 
         Args:
             region: AWS region to analyze
+            profile_name: Optional AWS profile name for authentication
         """
         self.region = region
         self.pricing = EC2Pricing(region)
-        self.inventory = EC2Inventory(region)
+        self.inventory = EC2Service(region=region, profile_name=profile_name)
+        logger.debug("Initialized EC2CostCalculator for region %s", region)
 
-    def _get_instance_pricing(self, instance_type: str, lifecycle: str) -> float:
+    def _get_instance_pricing(self, instance_type: str, lifecycle: InstanceLifecycle) -> float:
         """Get the appropriate price based on instance lifecycle.
 
         Args:
             instance_type: Type of the EC2 instance
-            lifecycle: Instance lifecycle ('on-demand', 'spot', or 'reserved')
+            lifecycle: Instance lifecycle (from InstanceLifecycle enum)
 
         Returns:
             Hourly price in USD
@@ -32,17 +73,18 @@ class EC2CostCalculator:
         hourly_price = self.pricing.get_ec2_ondemand_price(instance_type)
 
         if hourly_price is None:
-            print(f"Warning: Could not get price for instance type {instance_type}")
+            logger.warning("Could not get price for instance type %s", instance_type)
             return 0.0
 
         # Apply discounts based on instance lifecycle
-        if lifecycle == 'reserved':
+        if lifecycle == InstanceLifecycle.RESERVED:
             # Assuming 1-year no upfront reserved instance discount (~40% off on-demand)
             hourly_price *= 0.6
-        elif lifecycle == 'spot':
+        elif lifecycle == InstanceLifecycle.SPOT:
             # Assuming spot instances cost ~70% of on-demand (this is just an estimate)
             hourly_price *= 0.7
-
+            
+        logger.debug("Price for %s (%s): $%.4f/hour", instance_type, lifecycle.value, hourly_price)
         return hourly_price
 
     def calculate_instance_costs(self) -> List[Dict[str, Any]]:
@@ -55,25 +97,24 @@ class EC2CostCalculator:
         result = []
 
         for instance in instances:
-            if instance['State'] != 'running':
+            if instance.state.lower() != 'running':
                 continue
 
-            instance_type = instance['InstanceType']
-            lifecycle = instance.get('InstanceLifecycle', 'on-demand')
+            instance_type = instance.instance_type
 
             # Get the appropriate price based on instance lifecycle
-            hourly_price = self._get_instance_pricing(instance_type, lifecycle)
+            hourly_price = self._get_instance_pricing(instance_type, instance.lifecycle)
 
             # Calculate monthly and annual costs (assuming 730 hours per month, 8760 per year)
             monthly_cost = hourly_price * 730
             annual_cost = hourly_price * 8760
 
             instance_info = {
-                'InstanceId': instance['InstanceId'],
-                'Name': instance['Tags'].get('Name', 'N/A'),
+                'InstanceId': instance.instance_id,
+                'Name': instance.tags.get('Name', 'N/A'),
                 'InstanceType': instance_type,
-                'Lifecycle': lifecycle.upper(),
-                'State': instance['State'],
+                'Lifecycle': instance.lifecycle.value.upper(),
+                'State': instance.state,
                 'HourlyCost': hourly_price,
                 'MonthlyCost': monthly_cost,
                 'AnnualCost': annual_cost,
@@ -81,6 +122,7 @@ class EC2CostCalculator:
             }
 
             result.append(instance_info)
+            logger.debug("Calculated costs for instance %s: %s", instance.instance_id, instance_info)
 
         return result
 
@@ -91,6 +133,7 @@ class EC2CostCalculator:
             Dictionary with cost summary information including breakdown by lifecycle
         """
         instance_usage = self.inventory.get_instance_types_usage()
+        logger.debug("Instance usage summary: %s", instance_usage)
         summary = {
             'total_instances': 0,
             'total_monthly_cost': 0.0,
@@ -160,35 +203,12 @@ class EC2CostCalculator:
             summary: The cost summary dictionary from get_cost_summary()
             use_colors: Whether to use ANSI color codes in the output
         """
-        # Define colors - Minimalist palette
-        class Colors:
-            # Primary colors
-            PRIMARY = '\033[38;5;39m' if use_colors else ''  # Soft blue
-            SECONDARY = '\033[38;5;247m' if use_colors else ''  # Medium gray
-            SUCCESS = '\033[38;5;34m' if use_colors else ''  # Soft green
-            WARNING = '\033[38;5;208m' if use_colors else ''  # Orange
-            DANGER = '\033[38;5;196m' if use_colors else ''  # Red
-
-            # Text colors
-            TEXT = '\033[38;5;250m' if use_colors else ''  # Light gray
-            TEXT_BOLD = '\033[1;38;5;255m' if use_colors else ''  # White bold
-            TEXT_MUTED = '\033[38;5;240m' if use_colors else ''  # Dark gray
-
-            # Utility
-            RESET = '\033[0m' if use_colors else ''
-            BOLD = '\033[1m' if use_colors else ''
-            UNDERLINE = '\033[4m' if use_colors else ''
-
-            # Aliases for compatibility
-            HEADER = PRIMARY
-            BLUE = PRIMARY
-            CYAN = '\033[38;5;44m' if use_colors else ''
-            GREEN = SUCCESS
-            FAIL = DANGER
-            ENDC = RESET
-
+        # Use the Colors class for consistent coloring
+        Colors = self.Colors
+        
         def colorize(text: str, color: str) -> str:
-            return f"{color}{text}{Colors.ENDC}" if use_colors else text
+            """Apply color to text if use_colors is True."""
+            return Colors.colorize(text, color, use_colors)
 
         # Header with emojis and minimalist style
         print(f"\n{colorize('='*60, Colors.SECONDARY)}")
@@ -520,35 +540,12 @@ class EC2CostCalculator:
             show_reserved_savings: Whether to show potential savings from Reserved Instances
             use_colors: Whether to use ANSI color codes in the output
         """
-        # Define colors - Minimalist palette
-        class Colors:
-            # Primary colors
-            PRIMARY = '\033[38;5;39m' if use_colors else ''  # Soft blue
-            SECONDARY = '\033[38;5;247m' if use_colors else ''  # Medium gray
-            SUCCESS = '\033[38;5;34m' if use_colors else ''  # Soft green
-            WARNING = '\033[38;5;208m' if use_colors else ''  # Orange
-            DANGER = '\033[38;5;196m' if use_colors else ''  # Red
-
-            # Text colors
-            TEXT = '\033[38;5;250m' if use_colors else ''  # Light gray
-            TEXT_BOLD = '\033[1;38;5;255m' if use_colors else ''  # White bold
-            TEXT_MUTED = '\033[38;5;240m' if use_colors else ''  # Dark gray
-
-            # Utility
-            RESET = '\033[0m' if use_colors else ''
-            BOLD = '\033[1m' if use_colors else ''
-            UNDERLINE = '\033[4m' if use_colors else ''
-
-            # Aliases for compatibility
-            HEADER = PRIMARY
-            BLUE = PRIMARY
-            CYAN = '\033[38;5;44m' if use_colors else ''
-            GREEN = SUCCESS
-            FAIL = DANGER
-            ENDC = RESET
-
+        # Use the Colors class for consistent coloring
+        Colors = self.Colors
+        
         def colorize(text: str, color: str) -> str:
-            return f"{color}{text}{Colors.ENDC}" if use_colors else text
+            """Apply color to text if use_colors is True."""
+            return Colors.colorize(text, color, use_colors)
 
         instances = self.calculate_instance_costs()
         summary = self.get_cost_summary()
