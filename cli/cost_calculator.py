@@ -1,25 +1,15 @@
-from typing import Dict, List, Any, Optional, Tuple, Union
-import csv
+from typing import Dict, List, Any, Optional
 import logging
-import os
-import sys
-from datetime import datetime
 from decimal import Decimal
-from pathlib import Path
 
 from cli.services.aws.pricing import PricingService
 from cli.services.aws.ec2 import EC2Service
 from cli.ui import EC2CostReporter, Colors
+from cli.utils import CSVExporter
 from cli.models import (
-    EC2Instance,
     InstanceLifecycle,
-    InstanceCost,
     InstanceTypeCosts,
-    CostSummary,
-    SavingsOpportunity,
-    OperatingSystem,
-    Tenancy,
-    CapacityStatus
+    CostSummary
 )
 
 logger = logging.getLogger(__name__)
@@ -50,13 +40,11 @@ class EC2CostCalculator:
             Hourly price in USD
         """
         try:
-            # Obtener el precio base (on-demand)
-            # Usar los valores de los enums como strings
             hourly_price = self.pricing.get_ec2_ondemand_price(
                 instance_type=instance_type,
-                operating_system='Linux',  # Usar string en lugar de Enum
-                tenancy='Shared',          # Usar string en lugar de Enum
-                capacity_status='Used',    # Usar string en lugar de Enum
+                operating_system='Linux',
+                tenancy='Shared',
+                capacity_status='Used',
                 region=self.region
             )
 
@@ -64,19 +52,15 @@ class EC2CostCalculator:
                 logger.warning("Could not get price for instance type %s", instance_type)
                 return 0.0
 
-            # Aplicar descuentos basados en el ciclo de vida de la instancia
             if lifecycle == InstanceLifecycle.RESERVED:
-                # Asumir descuento de instancia reservada de 1 año sin pago inicial (~40% de descuento sobre on-demand)
                 hourly_price *= 0.6
             elif lifecycle == InstanceLifecycle.SPOT:
-                # Asumir que las instancias spot cuestan ~70% del precio on-demand (estimación)
                 hourly_price *= 0.7
-            
-            # Convertir a string seguro para logging
+
             lifecycle_str = str(lifecycle.value if hasattr(lifecycle, 'value') else lifecycle)
             logger.debug("Price for %s (%s): $%.4f/hour", instance_type, lifecycle_str, hourly_price)
             return hourly_price
-            
+
         except Exception as e:
             logger.error("Error getting price for instance type %s: %s", instance_type, str(e))
             return 0.0
@@ -225,30 +209,26 @@ class EC2CostCalculator:
         result = []
 
         for instance in instances:
-            if instance.get('State') != 'running':
+            if instance.state.lower() != 'running':
                 continue
 
-            instance_type = instance.get('InstanceType', 'N/A')
-            lifecycle = instance.get('InstanceLifecycle', 'on-demand')
+            instance_type = instance.instance_type
+            lifecycle = instance.lifecycle
             
-            # Convert lifecycle string to InstanceLifecycle enum
-            lifecycle_enum = InstanceLifecycle.ON_DEMAND
-            if isinstance(lifecycle, str):
-                lifecycle_enum = InstanceLifecycle[lifecycle.upper()] if hasattr(InstanceLifecycle, lifecycle.upper()) else InstanceLifecycle.ON_DEMAND
-            
-            hourly_price = self._get_instance_pricing(instance_type, lifecycle_enum)
+            hourly_price = self._get_instance_pricing(instance_type, lifecycle)
             monthly_cost = float(hourly_price) * 730.0  # 730 hours in a month
             annual_cost = float(hourly_price) * 8760.0  # 8760 hours in a year
 
             instance_info = {
-                'instance_id': instance.get('InstanceId', 'N/A'),
-                'name': instance.get('Tags', {}).get('Name', 'N/A'),
+                'instance_id': instance.instance_id,
+                'name': instance.tags.get('Name', 'N/A'),
                 'instance_type': instance_type,
-                'pricing_model': str(lifecycle_enum.value).upper(),
-                'state': instance.get('State', 'N/A'),
+                'pricing_model': str(lifecycle.value).upper(),
+                'state': instance.state,
                 'hourly_rate': f"${float(hourly_price):.4f}",
                 'monthly_cost': f"${monthly_cost:,.2f}",
-                'annual_cost': f"${annual_cost:,.2f}"
+                'annual_cost': f"${annual_cost:,.2f}",
+                'region': instance.region
             }
             result.append(instance_info)
 
@@ -370,80 +350,6 @@ class EC2CostCalculator:
 
         return result
 
-    def export_to_csv(self, data: List[Dict[str, Any]], output_file: str) -> str:
-        """Export data to a CSV file.
-
-        Args:
-            data: List of dictionaries containing data to export
-            output_file: Path to the output CSV file
-
-        Returns:
-            str: Path to the generated CSV file
-        """
-        # Ensure the output directory exists
-        output_path = Path(output_file)
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-
-        # Get fieldnames from data or use an empty list
-        fieldnames = list(data[0].keys()) if data else []
-
-        # Write data to CSV
-        with open(output_path, 'w', newline='', encoding='utf-8') as csvfile:
-            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-            writer.writeheader()
-            if data:
-                writer.writerows(data)
-
-        return str(output_path.absolute())
-
-    def export_instances_to_csv(self, output_file: Optional[str] = None) -> str:
-        """Export instance data to CSV.
-
-        Args:
-            output_file: Path to the output CSV file. If not provided, a default name will be used.
-
-        Returns:
-            str: Path to the generated CSV file
-        """
-        if output_file is None:
-            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-            output_file = f"ec2_instances_{self.region}_{timestamp}.csv"
-
-        instances_data = self.get_instances_data()
-        return self.export_to_csv(instances_data, output_file)
-
-    def export_costs_to_csv(self, output_file: Optional[str] = None) -> str:
-        """Export cost data to CSV.
-
-        Args:
-            output_file: Path to the output CSV file. If not provided, a default name will be used.
-
-        Returns:
-            str: Path to the generated CSV file
-        """
-        if output_file is None:
-            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-            output_file = f"ec2_costs_{self.region}_{timestamp}.csv"
-
-        costs_data = self.get_costs_data()
-        return self.export_to_csv(costs_data, output_file)
-
-    def export_savings_to_csv(self, output_file: Optional[str] = None) -> str:
-        """Export savings analysis data to CSV.
-
-        Args:
-            output_file: Path to the output CSV file. If not provided, a default name will be used.
-
-        Returns:
-            str: Path to the generated CSV file
-        """
-        if output_file is None:
-            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-            output_file = f"ec2_savings_{self.region}_{timestamp}.csv"
-
-        savings_data = self.get_savings_data()
-        return self.export_to_csv(savings_data, output_file)
-
     def _add_instance_cost_row(self, table_data: List[List[Any]], instance_type: str, 
                              instance_cost: InstanceTypeCosts, lifecycle_str: str, 
                              count: int, colorize: callable) -> None:
@@ -483,6 +389,54 @@ class EC2CostCalculator:
             colorize(f"${float(monthly_cost):,.2f}", Colors.TEXT_BOLD),
             colorize(f"${float(annual_cost):,.2f}", Colors.TEXT_BOLD)
         ])
+    
+    def export_to_csv(self, data: List[Dict[str, Any]], output_file: str) -> str:
+        """Export data to a CSV file.
+
+        Args:
+            data: List of dictionaries containing data to export
+            output_file: Path to the output CSV file
+
+        Returns:
+            str: Path to the generated CSV file
+        """
+        return CSVExporter.export_to_csv(data, output_file)
+    
+    def export_instances_to_csv(self, output_file: Optional[str] = None) -> str:
+        """Export instance data to CSV.
+
+        Args:
+            output_file: Path to the output CSV file. If not provided, a default name will be used.
+
+        Returns:
+            str: Path to the generated CSV file
+        """
+        instances = self.get_instances_data()
+        return CSVExporter.export_instances_to_csv(instances, output_file)
+    
+    def export_costs_to_csv(self, output_file: Optional[str] = None) -> str:
+        """Export cost data to CSV.
+
+        Args:
+            output_file: Path to the output CSV file. If not provided, a default name will be used.
+
+        Returns:
+            str: Path to the generated CSV file
+        """
+        costs = self.get_costs_data()
+        return CSVExporter.export_costs_to_csv(costs, output_file)
+    
+    def export_savings_to_csv(self, output_file: Optional[str] = None) -> str:
+        """Export savings analysis data to CSV.
+
+        Args:
+            output_file: Path to the output CSV file. If not provided, a default name will be used.
+
+        Returns:
+            str: Path to the generated CSV file
+        """
+        savings = self.get_savings_data()
+        return CSVExporter.export_savings_to_csv(savings, output_file)
 
     def print_cost_report(self, detailed: bool = True, show_reserved_savings: bool = False, 
                          use_colors: bool = True) -> None:

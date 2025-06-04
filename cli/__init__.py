@@ -8,6 +8,7 @@ from cli.models.cost_models import (
     CostSummary,
     SavingsOpportunity
 )
+from cli.utils import CSVExporter
 
 __all__ = [
     'cli',
@@ -18,7 +19,8 @@ __all__ = [
     'InstanceCost',
     'InstanceTypeCosts',
     'CostSummary',
-    'SavingsOpportunity'
+    'SavingsOpportunity',
+    'CSVExporter'
 ]
 
 __version__ = '0.1.0'
