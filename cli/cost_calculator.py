@@ -1,12 +1,16 @@
 from typing import Dict, List, Any, Optional
 import csv
 import logging
+import os
+import sys
 from pathlib import Path
 from datetime import datetime
 
-from cli.src.pricing import EC2Pricing
-from cli.src.services.aws.ec2 import EC2Service
-from cli.src.models.ec2 import InstanceLifecycle
+# Importaciones absolutas
+from cli.services.aws.pricing import PricingService
+from cli.services.aws.ec2 import EC2Service
+from cli.models.ec2 import InstanceLifecycle
+from cli.models.pricing import OperatingSystem, Tenancy, CapacityStatus
 from tabulate import tabulate
 
 logger = logging.getLogger(__name__)
@@ -56,7 +60,7 @@ class EC2CostCalculator:
             profile_name: Optional AWS profile name for authentication
         """
         self.region = region
-        self.pricing = EC2Pricing(region)
+        self.pricing = PricingService(region=region, profile_name=profile_name)
         self.inventory = EC2Service(region=region, profile_name=profile_name)
         logger.debug("Initialized EC2CostCalculator for region %s", region)
 
@@ -70,22 +74,37 @@ class EC2CostCalculator:
         Returns:
             Hourly price in USD
         """
-        hourly_price = self.pricing.get_ec2_ondemand_price(instance_type)
+        try:
+            # Obtener el precio base (on-demand)
+            # Usar los valores de los enums como strings
+            hourly_price = self.pricing.get_ec2_ondemand_price(
+                instance_type=instance_type,
+                operating_system='Linux',  # Usar string en lugar de Enum
+                tenancy='Shared',          # Usar string en lugar de Enum
+                capacity_status='Used',    # Usar string en lugar de Enum
+                region=self.region
+            )
 
-        if hourly_price is None:
-            logger.warning("Could not get price for instance type %s", instance_type)
-            return 0.0
+            if hourly_price is None:
+                logger.warning("Could not get price for instance type %s", instance_type)
+                return 0.0
 
-        # Apply discounts based on instance lifecycle
-        if lifecycle == InstanceLifecycle.RESERVED:
-            # Assuming 1-year no upfront reserved instance discount (~40% off on-demand)
-            hourly_price *= 0.6
-        elif lifecycle == InstanceLifecycle.SPOT:
-            # Assuming spot instances cost ~70% of on-demand (this is just an estimate)
-            hourly_price *= 0.7
+            # Aplicar descuentos basados en el ciclo de vida de la instancia
+            if lifecycle == InstanceLifecycle.RESERVED:
+                # Asumir descuento de instancia reservada de 1 año sin pago inicial (~40% de descuento sobre on-demand)
+                hourly_price *= 0.6
+            elif lifecycle == InstanceLifecycle.SPOT:
+                # Asumir que las instancias spot cuestan ~70% del precio on-demand (estimación)
+                hourly_price *= 0.7
             
-        logger.debug("Price for %s (%s): $%.4f/hour", instance_type, lifecycle.value, hourly_price)
-        return hourly_price
+            # Convertir a string seguro para logging
+            lifecycle_str = str(lifecycle.value if hasattr(lifecycle, 'value') else lifecycle)
+            logger.debug("Price for %s (%s): $%.4f/hour", instance_type, lifecycle_str, hourly_price)
+            return hourly_price
+            
+        except Exception as e:
+            logger.error("Error getting price for instance type %s: %s", instance_type, str(e))
+            return 0.0
 
     def calculate_instance_costs(self) -> List[Dict[str, Any]]:
         """Calculate costs for all EC2 instances in the region.
@@ -651,10 +670,17 @@ class EC2CostCalculator:
                 if table_data:
                     table_data.append(['─'*12, '─'*20, '─'*6, '─'*10, '─'*12, '─'*12])
 
-                for lifecycle in ['on-demand', 'reserved', 'spot']:
-                    count = data.get(lifecycle, 0)
+                for lifecycle_str in ['on-demand', 'reserved', 'spot']:
+                    count = data.get(lifecycle_str, 0)
                     if count > 0:
-                        hourly_price = self._get_instance_pricing(instance_type, lifecycle)
+                        # Mapear el string del ciclo de vida al valor correcto del enum
+                        lifecycle_map = {
+                            'on-demand': InstanceLifecycle.ON_DEMAND,
+                            'reserved': InstanceLifecycle.RESERVED,
+                            'spot': InstanceLifecycle.SPOT
+                        }
+                        lifecycle_enum = lifecycle_map[lifecycle_str]
+                        hourly_price = self._get_instance_pricing(instance_type, lifecycle_enum)
                         monthly_cost = hourly_price * 730 * count
                         annual_cost = monthly_cost * 12
 
@@ -662,17 +688,17 @@ class EC2CostCalculator:
                             'on-demand': '🔄 On-Demand',
                             'reserved': '🔒 Reserved (40% off)',
                             'spot': '✨ Spot (30% off)'
-                        }.get(lifecycle, lifecycle.upper())
+                        }.get(lifecycle_str, lifecycle_str.upper())
 
                         # Color based on lifecycle
                         lifecycle_color = {
                             'on-demand': Colors.TEXT,
                             'reserved': Colors.SUCCESS,
                             'spot': Colors.PRIMARY
-                        }.get(lifecycle, Colors.TEXT)
+                        }.get(lifecycle_str, Colors.TEXT)
 
                         table_data.append([
-                            colorize(instance_type, Colors.TEXT_BOLD) if lifecycle == 'on-demand' else '',
+                            colorize(instance_type, Colors.TEXT_BOLD) if lifecycle_str == 'on-demand' else '',
                             colorize(lifecycle_display, lifecycle_color),
                             count,
                             colorize(f"${hourly_price:.4f}", Colors.TEXT_BOLD),

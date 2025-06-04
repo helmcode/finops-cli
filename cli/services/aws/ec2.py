@@ -2,7 +2,9 @@ from typing import Dict, List, Optional, Any
 import logging
 import boto3
 from botocore.exceptions import ClientError, BotoCoreError
-from cli.src.models.ec2 import EC2Instance, InstanceLifecycle
+
+# Importación absoluta
+from cli.models.ec2 import EC2Instance, InstanceLifecycle
 
 logger = logging.getLogger(__name__)
 

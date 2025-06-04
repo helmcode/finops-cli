@@ -1,6 +1,9 @@
 import os
+import sys
 import click
-from cli.src.cost_calculator import EC2CostCalculator
+
+# Importación absoluta
+from cli.cost_calculator import EC2CostCalculator
 
 # Set up colors for better output - Minimalist palette
 class Colors:

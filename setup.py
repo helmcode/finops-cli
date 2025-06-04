@@ -12,7 +12,7 @@ setup(
     long_description=long_description,
     long_description_content_type='text/markdown',
     url='https://github.com/helmcode/finops-cli',
-    packages=find_packages(include=['cli', 'cli.src']),
+    packages=find_packages(include=['cli*']),
     include_package_data=True,
     install_requires=[
         'boto3>=1.20.0',
