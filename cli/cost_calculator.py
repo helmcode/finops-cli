@@ -2,8 +2,7 @@ from typing import Dict, List, Any, Optional
 import logging
 from decimal import Decimal
 
-from cli.services.aws.pricing import PricingService
-from cli.services.aws.ec2 import EC2Service
+from cli.services import PricingService, EC2Service, PriceCalculator
 from cli.ui import EC2CostReporter, Colors
 from cli.utils import CSVExporter
 from cli.models import (
@@ -25,45 +24,11 @@ class EC2CostCalculator:
             profile_name: Optional AWS profile name for authentication
         """
         self.region = region
-        self.pricing = PricingService(region=region, profile_name=profile_name)
+        pricing_service = PricingService(region=region, profile_name=profile_name)
+        self.pricing = PriceCalculator(pricing_service, region=region)
         self.inventory = EC2Service(region=region, profile_name=profile_name)
         logger.debug("Initialized EC2CostCalculator for region %s", region)
 
-    def _get_instance_pricing(self, instance_type: str, lifecycle: InstanceLifecycle) -> float:
-        """Get the appropriate price based on instance lifecycle.
-
-        Args:
-            instance_type: Type of the EC2 instance
-            lifecycle: Instance lifecycle (from InstanceLifecycle enum)
-
-        Returns:
-            Hourly price in USD
-        """
-        try:
-            hourly_price = self.pricing.get_ec2_ondemand_price(
-                instance_type=instance_type,
-                operating_system='Linux',
-                tenancy='Shared',
-                capacity_status='Used',
-                region=self.region
-            )
-
-            if hourly_price is None:
-                logger.warning("Could not get price for instance type %s", instance_type)
-                return 0.0
-
-            if lifecycle == InstanceLifecycle.RESERVED:
-                hourly_price *= 0.6
-            elif lifecycle == InstanceLifecycle.SPOT:
-                hourly_price *= 0.7
-
-            lifecycle_str = str(lifecycle.value if hasattr(lifecycle, 'value') else lifecycle)
-            logger.debug("Price for %s (%s): $%.4f/hour", instance_type, lifecycle_str, hourly_price)
-            return hourly_price
-
-        except Exception as e:
-            logger.error("Error getting price for instance type %s: %s", instance_type, str(e))
-            return 0.0
 
     def calculate_instance_costs(self) -> List[Dict[str, Any]]:
         """Calculate costs for all EC2 instances in the region.
@@ -81,7 +46,7 @@ class EC2CostCalculator:
             instance_type = instance.instance_type
 
             # Get the appropriate price based on instance lifecycle
-            hourly_price = self._get_instance_pricing(instance_type, instance.lifecycle)
+            hourly_price = self.pricing.get_instance_price(instance_type, instance.lifecycle)
 
             # Calculate monthly and annual costs (assuming 730 hours per month, 8760 per year)
             monthly_cost = hourly_price * 730
@@ -215,7 +180,7 @@ class EC2CostCalculator:
             instance_type = instance.instance_type
             lifecycle = instance.lifecycle
             
-            hourly_price = self._get_instance_pricing(instance_type, lifecycle)
+            hourly_price = self.pricing.get_instance_price(instance_type, lifecycle)
             monthly_cost = float(hourly_price) * 730.0  # 730 hours in a month
             annual_cost = float(hourly_price) * 8760.0  # 8760 hours in a year
 
@@ -227,8 +192,7 @@ class EC2CostCalculator:
                 'state': instance.state,
                 'hourly_rate': f"${float(hourly_price):.4f}",
                 'monthly_cost': f"${monthly_cost:,.2f}",
-                'annual_cost': f"${annual_cost:,.2f}",
-                'region': instance.region
+                'annual_cost': f"${annual_cost:,.2f}"
             }
             result.append(instance_info)
 
@@ -374,7 +338,7 @@ class EC2CostCalculator:
         )
         
         # Get the hourly price and convert to Decimal for calculations
-        hourly_price = Decimal(str(self._get_instance_pricing(instance_type, lifecycle_enum)))
+        hourly_price = Decimal(str(self.pricing.get_instance_price(instance_type, lifecycle_enum)))
         
         # Calculate costs using Decimal for precision
         monthly_cost = hourly_price * Decimal('730') * Decimal(str(count))
