@@ -1,3 +1,4 @@
+from decimal import Decimal
 from typing import Dict
 from tabulate import tabulate
 from ..models.cost_models import CostSummary, InstanceTypeCosts

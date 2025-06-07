@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
 from decimal import Decimal
 from enum import Enum
-from typing import Dict, Any
+from typing import Dict, Any, Union
 
 
 class InstanceLifecycle(Enum):

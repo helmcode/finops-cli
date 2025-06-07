@@ -9,12 +9,24 @@ from cli.models.pricing import (
     CapacityStatus
 )
 from cli.models.cost_models import (
-    InstanceLifecycle
+    InstanceLifecycle,
+    InstanceCost,
+    InstanceTypeCosts,
+    CostSummary,
+    SavingsOpportunity,
+    InstanceCosts,
+    PricingData
 )
 
 __all__ = [
     'EC2Instance',
     'InstanceLifecycle',
+    'InstanceCost',
+    'InstanceTypeCosts',
+    'CostSummary',
+    'SavingsOpportunity',
+    'InstanceCosts',
+    'PricingData',
     'EC2PriceDimensions',
     'EC2PriceInfo',
     'EC2PriceTerm',
