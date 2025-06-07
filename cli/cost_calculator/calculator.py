@@ -21,6 +21,7 @@ class EC2CostCalculator:
         pricing_service = PricingService(region=region, profile_name=profile_name)
         self.pricing = PriceCalculator(pricing_service, region=region)
         self.inventory = EC2Service(region=region, profile_name=profile_name)
+        self.instances: List[Dict[str, Any]] = []
         logger.debug("Initialized EC2CostCalculator for region %s", region)
 
     def calculate_instance_costs(self) -> List[Dict[str, Any]]:
@@ -29,10 +30,11 @@ class EC2CostCalculator:
         Returns:
             List of dictionaries with cost information per instance
         """
-        instances = self.inventory.get_all_instances()
+        ec2_instances = self.inventory.get_all_instances()
         result = []
+        self.instances = []  # Reset the instances list
 
-        for instance in instances:
+        for instance in ec2_instances:
             if instance.state.lower() != 'running':
                 continue
 
@@ -42,8 +44,23 @@ class EC2CostCalculator:
             # Calculate monthly and annual costs (assuming 730 hours per month, 8760 per year)
             monthly_cost = hourly_price * 730
             annual_cost = hourly_price * 8760
-
+            
+            # Store instance details for detailed reporting
             instance_info = {
+                'InstanceId': instance.instance_id,
+                'Name': instance.tags.get('Name', 'N/A'),
+                'InstanceType': instance_type,
+                'Lifecycle': instance.lifecycle,
+                'State': instance.state,
+                'HourlyRate': hourly_price,
+                'MonthlyCost': monthly_cost,
+                'AnnualCost': annual_cost,
+                'Tags': instance.tags
+            }
+            self.instances.append(instance_info)
+
+            # Add to the result list with the required format for backward compatibility
+            result_instance = {
                 'InstanceId': instance.instance_id,
                 'Name': instance.tags.get('Name', 'N/A'),
                 'InstanceType': instance_type,
@@ -55,8 +72,8 @@ class EC2CostCalculator:
                 'Region': self.region
             }
 
-            result.append(instance_info)
-            logger.debug("Calculated costs for instance %s: %s", instance.instance_id, instance_info)
+            result.append(result_instance)
+            logger.debug("Calculated costs for instance %s: %s", instance.instance_id, result_instance)
 
         return result
 
@@ -135,9 +152,8 @@ class EC2CostCalculator:
 
         return summary
 
-    def print_cost_report(self, detailed: bool = True, show_reserved_savings: bool = False, 
-                           use_colors: bool = True) -> None:
-        """Print a formatted cost report to the console.
+    def print_cost_report(self, detailed: bool = True, show_reserved_savings: bool = False, use_colors: bool = True) -> None:
+        """Print a cost report to the console.
 
         Args:
             detailed: Whether to show detailed instance information
@@ -146,17 +162,17 @@ class EC2CostCalculator:
         """
         from .reporter import EC2CostReporterExtended
 
-        # Get the cost summary
-        summary = self.get_cost_summary()
+        # Calculate costs and get summary
+        instance_costs = self.calculate_instance_costs()
+        summary = self.get_cost_summary()  # Usar get_cost_summary en lugar de calculate_summary
+        
+        # Add instances to summary for detailed reporting
+        if detailed and hasattr(self, 'instances'):  # Verificar que exista el atributo instances
+            summary.instances = self.instances
 
-        # Create and use the reporter
+        # Print the report
         reporter = EC2CostReporterExtended(region=self.region, use_colors=use_colors)
-        reporter.print_cost_report(
-            summary=summary,
-            detailed=detailed,
-            show_reserved_savings=show_reserved_savings,
-            use_colors=use_colors
-        )
+        reporter.print_cost_report(summary=summary, detailed=detailed, show_reserved_savings=show_reserved_savings, use_colors=use_colors)
 
     def export_costs_to_csv(self, output_file: str = None) -> str:
         """Export cost data to a CSV file.

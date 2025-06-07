@@ -57,35 +57,26 @@ class EC2CostReporterExtended(EC2CostReporter):
         ])
 
     def print_cost_report(self, summary: CostSummary, detailed: bool = True, 
-                         show_reserved_savings: bool = False, use_colors: bool = True) -> None:
+                         show_reserved_savings: bool = False, **kwargs) -> None:
         """Print a formatted cost report to the console.
+
+        This method extends the base class implementation to add support for
+        showing detailed instance information when the 'detailed' flag is True.
 
         Args:
             summary: Cost summary to report on
             detailed: Whether to show detailed instance information
             show_reserved_savings: Whether to show potential savings from Reserved Instances
-            use_colors: Whether to use ANSI color codes in the output
+            **kwargs: Additional keyword arguments (for backward compatibility)
         """
-        # Set colors based on parameter
-        self.use_colors = use_colors
-
-        # Print header
-        self._print_header()
-
-        # Print instance details if requested
-        if detailed and summary.instance_costs:
-            self._print_instance_details(summary.instance_costs)
-
-        # Print cost summary
-        self._print_cost_summary(summary)
-
-        # Print cost breakdown if requested
-        if detailed and summary.instance_costs:
-            self._print_cost_breakdown(summary.instance_costs)
-
-        # Print reserved savings analysis if requested
-        if show_reserved_savings:
+        # Handle backward compatibility with old call signature
+        use_colors = kwargs.get('use_colors', True)
+        if hasattr(self, 'use_colors'):
+            self.use_colors = use_colors
+        
+        # Call the parent class method to handle the basic report
+        super().print_cost_report(summary=summary, detailed=detailed, show_reserved_savings=show_reserved_savings)
+        
+        # Add reserved savings analysis if requested
+        if show_reserved_savings and hasattr(self, 'print_reserved_savings_analysis'):
             self.print_reserved_savings_analysis(summary)
-
-        # Print footer
-        self._print_footer()

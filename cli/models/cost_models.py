@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
 from decimal import Decimal
 from enum import Enum
-from typing import Dict, Any, Union
+from typing import Dict, Any, Union, List
 
 
 class InstanceLifecycle(Enum):
@@ -72,6 +72,7 @@ class CostSummary:
     total_spot_cost: Decimal = Decimal('0.0')
     monthly_savings: Decimal = Decimal('0.0')
     instance_costs: Dict[str, 'InstanceTypeCosts'] = field(default_factory=dict)
+    instances: List[Dict[str, Any]] = field(default_factory=list)  # Lista de instancias individuales
 
     @property
     def total_annual_cost(self) -> Decimal:

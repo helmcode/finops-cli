@@ -1,7 +1,8 @@
 from decimal import Decimal
-from typing import Dict
+from typing import Dict, List, Any
 from tabulate import tabulate
-from ..models.cost_models import CostSummary, InstanceTypeCosts
+from ..models.cost_models import CostSummary, InstanceTypeCosts, InstanceLifecycle
+from ..models.ec2 import EC2Instance
 from .colors import Colors
 
 
@@ -30,17 +31,34 @@ class EC2CostReporter:
         """
         return Colors.colorize(text, color, self.use_colors)
 
-    def print_cost_report(self, summary: CostSummary) -> None:
+    def print_cost_report(self, summary: CostSummary, detailed: bool = False, show_reserved_savings: bool = False, **kwargs) -> None:
         """Print a detailed cost report.
 
         Args:
             summary: The cost summary to report on
+            detailed: Whether to show detailed instance information
+            show_reserved_savings: Whether to show potential savings from Reserved Instances
+            **kwargs: Additional keyword arguments (for backward compatibility)
         """
+        # Handle backward compatibility with old call signature
+        use_colors = kwargs.get('use_colors', True)
+        if hasattr(self, 'use_colors'):
+            self.use_colors = use_colors
+        
         self._print_header()
         self._print_instance_details(summary.instance_costs)
+        
+        # Show detailed instances if requested
+        if detailed:
+            self._print_detailed_instances(summary)
+            
         self._print_cost_summary(summary)
         self._print_cost_breakdown(summary.instance_costs)
-        self.print_reserved_savings_analysis(summary)
+        
+        # Only show reserved savings analysis if requested
+        if show_reserved_savings:
+            self.print_reserved_savings_analysis(summary)
+            
         self._print_footer()
 
     def _print_header(self) -> None:
@@ -60,9 +78,9 @@ class EC2CostReporter:
             print(self.colorize("No instance data available.", Colors.WARNING))
             return
 
-        print(self.colorize("INSTANCE DETAILS:", Colors.TEXT_BOLD))
+        print(self.colorize("INSTANCE TYPE SUMMARY:", Colors.TEXT_BOLD))
 
-        # Prepare table data
+        # Prepare table data for instance type summary
         table_data = []
         for instance_type, costs in sorted(instance_costs.items()):
             table_data.append([
@@ -74,7 +92,7 @@ class EC2CostReporter:
                 f"${float(costs.monthly_cost):,.2f}"
             ])
 
-        # Print table
+        # Print instance type summary table
         headers = [
             self.colorize("TYPE", Colors.TEXT_MUTED + Colors.UNDERLINE),
             self.colorize("ON-DEMAND", Colors.TEXT_MUTED + Colors.UNDERLINE),
@@ -82,6 +100,68 @@ class EC2CostReporter:
             self.colorize("RESERVED", Colors.TEXT_MUTED + Colors.UNDERLINE),
             self.colorize("HOURLY RATE", Colors.TEXT_MUTED + Colors.UNDERLINE),
             self.colorize("MONTHLY COST", Colors.TEXT_MUTED + Colors.UNDERLINE)
+        ]
+
+        print(tabulate(table_data, headers=headers, tablefmt="simple_grid"))
+        print()  # Add spacing
+        
+    def _print_detailed_instances(self, summary: CostSummary) -> None:
+        """Print detailed information for each instance.
+        
+        Args:
+            summary: The cost summary containing the instances to display
+        """
+        if not hasattr(summary, 'instances') or not summary.instances:
+            return
+            
+        print(self.colorize("DETAILED INSTANCE LIST:", Colors.TEXT_BOLD))
+        
+        # Prepare table data for detailed instances
+        table_data = []
+        
+        # Sort instances by monthly cost (descending)
+        sorted_instances = sorted(summary.instances, 
+                                key=lambda x: float(x.get('MonthlyCost', 0)), 
+                                reverse=True)
+        
+        # Add instances to table data with proper formatting
+        for i, instance in enumerate(sorted_instances, 1):
+            # Get cost type and corresponding color/emoji
+            lifecycle = instance.get('Lifecycle', '').lower()
+            if lifecycle == 'spot':
+                cost_type_color = Colors.PRIMARY
+                cost_type_display = "✨ Spot"
+            elif lifecycle == 'reserved':
+                cost_type_color = Colors.SUCCESS
+                cost_type_display = "🔒 Reserved"
+            else:
+                cost_type_color = Colors.TEXT
+                cost_type_display = "🔄 On-Demand"
+                
+            # Get instance name or use instance ID if name is not available
+            instance_name = instance.get('Name', 'N/A')
+            if instance_name == 'N/A' and 'Tags' in instance and 'Name' in instance['Tags']:
+                instance_name = instance['Tags']['Name']
+                
+            table_data.append([
+                i,  # Instance number
+                self.colorize(instance_name[:30] + ('...' if len(instance_name) > 30 else ''), Colors.TEXT_BOLD),  # Truncate long names
+                self.colorize(instance.get('InstanceType', 'N/A'), Colors.TEXT),
+                self.colorize(cost_type_display, cost_type_color),
+                f"${float(instance.get('HourlyRate', 0)):.4f}",
+                f"${float(instance.get('MonthlyCost', 0)):,.2f}",
+                f"${float(instance.get('AnnualCost', 0)):,.2f}"
+            ])
+        
+        # Print detailed instances table
+        headers = [
+            self.colorize("#", Colors.TEXT_MUTED + Colors.UNDERLINE),
+            self.colorize("NAME", Colors.TEXT_MUTED + Colors.UNDERLINE),
+            self.colorize("TYPE", Colors.TEXT_MUTED + Colors.UNDERLINE),
+            self.colorize("COST TYPE", Colors.TEXT_MUTED + Colors.UNDERLINE),
+            self.colorize("HOURLY RATE", Colors.TEXT_MUTED + Colors.UNDERLINE),
+            self.colorize("MONTHLY COST", Colors.TEXT_MUTED + Colors.UNDERLINE),
+            self.colorize("ANNUAL COST", Colors.TEXT_MUTED + Colors.UNDERLINE)
         ]
 
         print(tabulate(table_data, headers=headers, tablefmt="simple_grid"))
