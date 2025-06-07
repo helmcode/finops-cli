@@ -1,19 +1,17 @@
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional
 import logging
 import boto3
 from botocore.exceptions import ClientError, BotoCoreError
-
-# Importación absoluta
 from cli.models.ec2 import EC2Instance, InstanceLifecycle
 
 logger = logging.getLogger(__name__)
 
 class EC2Service:
     """Service for interacting with AWS EC2."""
-    
+
     def __init__(self, region: str = 'us-east-1', profile_name: Optional[str] = None):
         """Initialize the EC2 service.
-        
+
         Args:
             region: AWS region to operate in
             profile_name: Optional AWS profile name for authentication
@@ -22,7 +20,7 @@ class EC2Service:
         self.profile_name = profile_name
         self._client = None
         self._session = None
-    
+
     @property
     def session(self):
         """Lazily create a boto3 session."""
@@ -32,20 +30,20 @@ class EC2Service:
                 session_kwargs['profile_name'] = self.profile_name
             self._session = boto3.Session(**session_kwargs)
         return self._session
-    
+
     @property
     def client(self):
         """Lazily create an EC2 client."""
         if self._client is None:
             self._client = self.session.client('ec2')
         return self._client
-    
+
     def get_all_instances(self) -> List[EC2Instance]:
         """Get all EC2 instances in the region.
-        
+
         Returns:
             List of EC2Instance objects
-            
+
         Raises:
             ClientError: If there's an error with the AWS API call
             BotoCoreError: For general boto3 errors
@@ -53,7 +51,7 @@ class EC2Service:
         try:
             paginator = self.client.get_paginator('describe_instances')
             instances = []
-            
+
             for page in paginator.paginate():
                 for reservation in page.get('Reservations', []):
                     for instance_data in reservation.get('Instances', []):
@@ -62,15 +60,15 @@ class EC2Service:
                             instances.append(instance)
                         except (KeyError, ValueError) as e:
                             logger.warning("Skipping instance due to parsing error: %s", e)
-            
+
             # Add reserved instances information
             self._add_reserved_instances_info(instances)
             return instances
-            
+
         except (ClientError, BotoCoreError) as e:
             logger.error("Error retrieving EC2 instances: %s", e)
             raise
-    
+
     def _add_reserved_instances_info(self, instances: List[EC2Instance]) -> None:
         """Add reserved instances information to the instances list.
 
@@ -105,7 +103,7 @@ class EC2Service:
 
         except Exception as e:
             logger.warning("Could not get reserved instances info: %s", e)
-    
+
     def get_instance_types_usage(self) -> Dict[str, Dict]:
         """Get count of instances by instance type and lifecycle.
 

@@ -1,45 +1,37 @@
-"""
-Report generation and display utilities for EC2 cost information.
-
-This module provides the EC2CostReporter class which handles formatting and displaying
-cost information in a user-friendly way, with support for colored output.
-"""
-from typing import List, Dict, Any, Optional
-from decimal import Decimal
+from typing import Dict
 from tabulate import tabulate
-
-from ..models.cost_models import CostSummary, InstanceTypeCosts, InstanceLifecycle
+from ..models.cost_models import CostSummary, InstanceTypeCosts
 from .colors import Colors
 
 
 class EC2CostReporter:
     """Handles the presentation of EC2 cost information."""
-    
+
     def __init__(self, region: str, use_colors: bool = True):
         """Initialize the EC2CostReporter.
-        
+
         Args:
             region: AWS region being reported on
             use_colors: Whether to use ANSI color codes in the output
         """
         self.region = region
         self.use_colors = use_colors
-    
+
     def colorize(self, text: str, color: str) -> str:
         """Apply color to text if use_colors is True.
-        
+
         Args:
             text: Text to colorize
             color: Color code to apply
-            
+
         Returns:
             Colored text if use_colors is True, else original text
         """
         return Colors.colorize(text, color, self.use_colors)
-    
+
     def print_cost_report(self, summary: CostSummary) -> None:
         """Print a detailed cost report.
-        
+
         Args:
             summary: The cost summary to report on
         """
@@ -49,26 +41,26 @@ class EC2CostReporter:
         self._print_cost_breakdown(summary.instance_costs)
         self.print_reserved_savings_analysis(summary)
         self._print_footer()
-    
+
     def _print_header(self) -> None:
         """Print the report header."""
         title = "EC2 INSTANCE COST REPORT"
         print(f"\n{self.colorize('='*60, Colors.SECONDARY)}")
         print(self.colorize(title.center(60), Colors.TEXT_BOLD + Colors.UNDERLINE))
         print(f"{self.colorize('='*60, Colors.SECONDARY)}\n")
-    
+
     def _print_instance_details(self, instance_costs: Dict[str, InstanceTypeCosts]) -> None:
         """Print details about each instance type.
-        
+
         Args:
             instance_costs: Dictionary mapping instance types to their cost data
         """
         if not instance_costs:
             print(self.colorize("No instance data available.", Colors.WARNING))
             return
-            
+
         print(self.colorize("INSTANCE DETAILS:", Colors.TEXT_BOLD))
-        
+
         # Prepare table data
         table_data = []
         for instance_type, costs in sorted(instance_costs.items()):
@@ -80,7 +72,7 @@ class EC2CostReporter:
                 f"${float(costs.hourly_rate):.4f}",
                 f"${float(costs.monthly_cost):,.2f}"
             ])
-        
+
         # Print table
         headers = [
             self.colorize("TYPE", Colors.TEXT_MUTED + Colors.UNDERLINE),
@@ -90,61 +82,61 @@ class EC2CostReporter:
             self.colorize("HOURLY RATE", Colors.TEXT_MUTED + Colors.UNDERLINE),
             self.colorize("MONTHLY COST", Colors.TEXT_MUTED + Colors.UNDERLINE)
         ]
-        
+
         print(tabulate(table_data, headers=headers, tablefmt="simple_grid"))
         print()  # Add spacing
-    
+
     def _print_cost_summary(self, summary: CostSummary) -> None:
         """Print a summary of costs.
-        
+
         Args:
             summary: The cost summary to display
         """
         print(self.colorize("COST SUMMARY:", Colors.TEXT_BOLD))
-        
+
         # Format costs with 2 decimal places and thousand separators
         total_instances = sum(cost.total_instances for cost in summary.instance_costs.values())
-        
+
         print(f"{self.colorize('•', Colors.SECONDARY)} {self.colorize('Total Instances:', Colors.TEXT)} "
               f"{self.colorize(str(total_instances), Colors.TEXT_BOLD)}")
-        
+
         print(f"{self.colorize('•', Colors.SECONDARY)} {self.colorize('Total Monthly Cost:', Colors.TEXT)} "
               f"{self.colorize(f'${float(summary.total_monthly_cost):,.2f}', Colors.TEXT_BOLD)}")
-        
+
         print(f"{self.colorize('•', Colors.SECONDARY)} {self.colorize('Total Annual Cost:', Colors.TEXT)} "
               f"{self.colorize(f'${float(summary.total_annual_cost):,.2f}', Colors.TEXT_BOLD)}")
-        
+
         # Add a note about the cost calculation
         print(f"\n{self.colorize('ℹ', Colors.SECONDARY)} "
               f"{self.colorize('Note:', Colors.TEXT_BOLD)} "
               f"{self.colorize('Costs are estimates based on 730 hours/month and 8760 hours/year.', Colors.TEXT_MUTED)}")
-        
+
         print()  # Add spacing
-    
+
     def _print_cost_breakdown(self, instance_costs: Dict[str, InstanceTypeCosts]) -> None:
         """Print a breakdown of costs by instance type.
-        
+
         Args:
             instance_costs: Dictionary mapping instance types to their cost data
         """
         if not instance_costs:
             return
-            
+
         print(self.colorize("COST BREAKDOWN BY INSTANCE TYPE:", Colors.TEXT_BOLD))
-        
+
         # Calculate total monthly cost for percentage calculations
         total_monthly_cost = sum(cost.monthly_cost for cost in instance_costs.values())
-        
+
         # Prepare table data
         table_data = []
-        for instance_type, costs in sorted(instance_costs.items(), 
-                                         key=lambda x: x[1].monthly_cost, 
+        for instance_type, costs in sorted(instance_costs.items(),
+                                         key=lambda x: x[1].monthly_cost,
                                          reverse=True):
             if costs.monthly_cost == 0:
                 continue
-                
+
             percentage = (costs.monthly_cost / total_monthly_cost) * 100
-            
+
             # Determine color based on percentage
             if percentage > 20:
                 cost_color = Colors.DANGER
@@ -152,36 +144,36 @@ class EC2CostReporter:
                 cost_color = Colors.WARNING
             else:
                 cost_color = Colors.SUCCESS
-            
+
             table_data.append([
                 self.colorize(instance_type, Colors.TEXT_BOLD),
                 f"${float(costs.monthly_cost):,.2f}",
                 self.colorize(f"{percentage:.1f}%", cost_color)
             ])
-        
+
         # Print table
         headers = [
             self.colorize("INSTANCE TYPE", Colors.TEXT_MUTED + Colors.UNDERLINE),
             self.colorize("MONTHLY COST", Colors.TEXT_MUTED + Colors.UNDERLINE),
             self.colorize("% OF TOTAL", Colors.TEXT_MUTED + Colors.UNDERLINE)
         ]
-        
+
         print(tabulate(table_data, headers=headers, tablefmt="simple_grid"))
         print()  # Add spacing
-    
+
     def print_reserved_savings_analysis(self, summary: CostSummary) -> None:
         """Print an analysis of potential savings from Reserved Instances.
-        
+
         Args:
             summary: The cost summary to analyze
         """
         if not summary or not summary.instance_costs:
             return
-            
+
         # Header with emojis and minimalist style
         print(f"\n{self.colorize('='*60, Colors.SECONDARY)}")
-        print(self.colorize("💰  RESERVED INSTANCE SAVINGS ANALYSIS  💰".center(60), 
-                          Colors.TEXT_BOLD + Colors.BOLD))
+        print(self.colorize("💰  RESERVED INSTANCE SAVINGS ANALYSIS  💰".center(60),
+                            Colors.TEXT_BOLD + Colors.BOLD))
         print(self.colorize('='*60, Colors.SECONDARY))
         print(f"\n{self.colorize('ℹ️  This analysis shows potential savings from converting On-Demand to Reserved Instances', Colors.TEXT)}")
         print(f"{self.colorize('   Savings are calculated using the', Colors.TEXT)} {self.colorize('1-year No Upfront', Colors.TEXT_BOLD)} {self.colorize('payment option', Colors.TEXT)} "
@@ -239,7 +231,7 @@ class EC2CostReporter:
 
             # Convert total_monthly_cost to Decimal for calculations
             total_monthly_cost_dec = Decimal(str(total_monthly_cost))
-            
+
             # Calculate the percentage of savings using Decimal
             total_ondemand_equivalent = total_reserved_savings + (total_monthly_cost_dec - total_reserved_savings)
             if total_ondemand_equivalent > 0:
@@ -281,9 +273,9 @@ class EC2CostReporter:
                   f"for additional savings ({self.colorize('up to 60% off', Colors.SUCCESS)}).")
         else:
             print(f"\n{self.colorize('Note: No On-Demand instances found for Reserved Instance analysis.', Colors.TEXT_MUTED)}")
-        
+
         print(self.colorize('='*60, Colors.SECONDARY))
-    
+
     def _print_footer(self) -> None:
         """Print the report footer."""
         print(f"\n{self.colorize('Report generated by FinOps CLI', Colors.TEXT_MUTED)}")

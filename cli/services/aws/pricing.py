@@ -1,15 +1,11 @@
-"""Service for interacting with AWS Pricing API."""
 import json
 import logging
 from typing import Dict, Optional, Any
-
 import boto3
 from botocore.exceptions import BotoCoreError, ClientError
-
-# Importaciones absolutas
 from cli.services.exceptions import AWSServiceError
 from cli.models.pricing import (
-    EC2PriceInfo, 
+    EC2PriceInfo,
     EC2PricingRequest,
     EC2PriceDimensions,
     EC2PriceTerm
@@ -58,16 +54,16 @@ class PricingService:
             AWSServiceError: If there's an error calling the AWS API
         """
         region = region or self.region
-        
+
         try:
             # Create pricing request with proper enum values
             from cli.models.pricing import OperatingSystem, Tenancy, CapacityStatus
-            
+
             # Convert string values to enums if they're not already
             os_enum = OperatingSystem(operating_system) if isinstance(operating_system, str) else operating_system
             tenancy_enum = Tenancy(tenancy) if isinstance(tenancy, str) else tenancy
             capacity_enum = CapacityStatus(capacity_status) if isinstance(capacity_status, str) else capacity_status
-            
+
             pricing_request = EC2PricingRequest(
                 instance_type=instance_type,
                 operating_system=os_enum,
@@ -76,7 +72,7 @@ class PricingService:
                 capacity_status=capacity_enum,
                 region=region or self.region
             )
-            
+
             # Get price info from AWS
             response = self.client.get_products(
                 ServiceCode='AmazonEC2',
@@ -94,7 +90,7 @@ class PricingService:
             # Parse the price information
             price_item = json.loads(response['PriceList'][0])
             price_info = self._parse_price_info(price_item)
-            
+
             # Extract the price from the first available term
             for term_type in ['OnDemand', 'Reserved']:
                 for term in price_info.terms.get(term_type, {}).values():
@@ -120,22 +116,22 @@ class PricingService:
 
     def _parse_price_info(self, price_item: Dict[str, Any]) -> EC2PriceInfo:
         """Parse the raw price item into structured data.
-        
+
         Args:
             price_item: Raw price item from AWS Pricing API
-            
+
         Returns:
             EC2PriceInfo: Parsed price information
         """
         terms = {}
-        
+
         # Parse terms (OnDemand, Reserved, etc.)
         for term_type, term_data in price_item.get('terms', {}).items():
             terms[term_type] = {}
-            
+
             for term_code, term_info in term_data.items():
                 price_dimensions = {}
-                
+
                 # Parse price dimensions
                 for dim_code, dim_info in term_info.get('priceDimensions', {}).items():
                     price_dimensions[dim_code] = EC2PriceDimensions(
@@ -147,7 +143,7 @@ class PricingService:
                         price_per_unit=dim_info.get('pricePerUnit', {}),
                         applicable_rates=dim_info.get('appliesTo')
                     )
-                
+
                 # Create the term
                 terms[term_type][term_code] = EC2PriceTerm(
                     effective_date=term_info.get('effectiveDate', ''),
@@ -155,7 +151,7 @@ class PricingService:
                     term_attributes=term_info.get('termAttributes', {}),
                     price_dimensions=price_dimensions
                 )
-        
+
         # Create the price info object
         return EC2PriceInfo(
             product=price_item.get('product', {}),

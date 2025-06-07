@@ -1,5 +1,5 @@
 from cli.finops_cli import cli
-from cli.cost_calculator import EC2CostCalculator
+from cli.cost_calculator.calculator import EC2CostCalculator
 from cli.ui import EC2CostReporter, Colors
 from cli.models.cost_models import (
     InstanceLifecycle,

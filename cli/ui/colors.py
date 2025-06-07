@@ -1,8 +1,3 @@
-"""
-Module for handling console colors and text formatting.
-Provides a consistent way to apply colors and styles to console output.
-"""
-
 class Colors:
     """ANSI color codes for console output."""
     # Primary colors

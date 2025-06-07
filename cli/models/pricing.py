@@ -1,4 +1,3 @@
-"""Data models for AWS pricing information."""
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Dict, Optional
@@ -65,14 +64,14 @@ class EC2PricingRequest:
     pre_installed_sw: str = 'NA'
     capacity_status: CapacityStatus = CapacityStatus.USED
     region: str = 'us-east-1'
-    
+
     def to_filters(self) -> list[dict]:
         """Convert the request to AWS Pricing API filters."""
         # Obtener los valores, manejando tanto strings como objetos Enum
         os_value = self.operating_system.value if hasattr(self.operating_system, 'value') else str(self.operating_system)
         tenancy_value = self.tenancy.value if hasattr(self.tenancy, 'value') else str(self.tenancy)
         capacity_value = self.capacity_status.value if hasattr(self.capacity_status, 'value') else str(self.capacity_status)
-        
+
         return [
             {'Type': 'TERM_MATCH', 'Field': 'serviceCode', 'Value': 'AmazonEC2'},
             {'Type': 'TERM_MATCH', 'Field': 'instanceType', 'Value': self.instance_type},
@@ -82,7 +81,7 @@ class EC2PricingRequest:
             {'Type': 'TERM_MATCH', 'Field': 'capacitystatus', 'Value': capacity_value},
             {'Type': 'TERM_MATCH', 'Field': 'location', 'Value': self._get_region_name()}
         ]
-    
+
     def _get_region_name(self) -> str:
         """Convert AWS region code to full region name for Pricing API."""
         region_map = {

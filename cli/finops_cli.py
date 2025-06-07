@@ -1,9 +1,6 @@
 import os
-import sys
 import click
-
-# Importaciones absolutas
-from cli.cost_calculator import EC2CostCalculator
+from cli.cost_calculator.calculator import EC2CostCalculator
 from cli.ui.colors import Colors
 
 @click.group(invoke_without_command=True)
@@ -61,14 +58,14 @@ def export_instances(region, output_file, no_color):
     try:
         calculator = EC2CostCalculator(region)
         output_path = calculator.export_instances_to_csv(output_file)
-        
+
         if not no_color:
             message = f"{Colors.SUCCESS}✓ Successfully exported instance data to {Colors.BOLD}{output_path}{Colors.ENDC}"
         else:
             message = f"Successfully exported instance data to {output_path}"
-            
+
         click.echo(message)
-        
+
     except Exception as e:
         error_msg = f"Error exporting instance data: {str(e)}"
         if not no_color:
@@ -103,14 +100,14 @@ def export_costs(region, output_file, no_color):
     try:
         calculator = EC2CostCalculator(region)
         output_path = calculator.export_costs_to_csv(output_file)
-        
+
         if not no_color:
             message = f"{Colors.SUCCESS}✓ Successfully exported cost data to {Colors.BOLD}{output_path}{Colors.ENDC}"
         else:
             message = f"Successfully exported cost data to {output_path}"
-            
+
         click.echo(message)
-        
+
     except Exception as e:
         error_msg = f"Error exporting cost data: {str(e)}"
         if not no_color:
@@ -145,14 +142,14 @@ def export_savings(region, output_file, no_color):
     try:
         calculator = EC2CostCalculator(region)
         output_path = calculator.export_savings_to_csv(output_file)
-        
+
         if not no_color:
             message = f"{Colors.SUCCESS}✓ Successfully exported savings analysis to {Colors.BOLD}{output_path}{Colors.ENDC}"
         else:
             message = f"Successfully exported savings analysis to {output_path}"
-            
+
         click.echo(message)
-        
+
     except Exception as e:
         error_msg = f"Error exporting savings analysis: {str(e)}"
         if not no_color:
