@@ -1,0 +1,75 @@
+{{template "base.html" .}}
+{{define "content"}}
+<div class="card">
+    <div class="metric">
+        <div class="value">${{printf "%.2f" .Data.TotalSpend}}</div>
+        <div class="label">Total Spend ({{.Data.Currency}})</div>
+    </div>
+    <div class="metric">
+        <div class="value">{{len .Data.TopServices}}</div>
+        <div class="label">Active Services</div>
+    </div>
+    <div class="metric">
+        <div class="value">{{.TotalResources}}</div>
+        <div class="label">Resources Discovered</div>
+    </div>
+</div>
+
+{{if .Data.TopServices}}
+<div class="card">
+    <h2>Top Services by Cost</h2>
+    <div class="chart-container">
+        <canvas id="servicesChart"></canvas>
+    </div>
+    <table>
+        <thead>
+            <tr><th>Service</th><th>Cost</th><th>% of Total</th></tr>
+        </thead>
+        <tbody>
+            {{range .Data.TopServices}}
+            <tr>
+                <td>{{.Service}}</td>
+                <td>${{printf "%.2f" .TotalAmount}}</td>
+                <td>{{if $.Data.TotalSpend}}{{printf "%.1f" (divf (mulf .TotalAmount 100) $.Data.TotalSpend)}}%{{end}}</td>
+            </tr>
+            {{end}}
+        </tbody>
+    </table>
+</div>
+{{end}}
+
+{{if .Data.CostByRegion}}
+<div class="card">
+    <h2>Cost by Region</h2>
+    <table>
+        <thead>
+            <tr><th>Region</th><th>Cost</th></tr>
+        </thead>
+        <tbody>
+            {{range .Data.CostByRegion}}
+            <tr>
+                <td>{{if .Region}}{{.Region}}{{else}}Global{{end}}</td>
+                <td>${{printf "%.2f" .TotalAmount}}</td>
+            </tr>
+            {{end}}
+        </tbody>
+    </table>
+</div>
+{{end}}
+
+{{if .Data.TopServices}}
+<script>
+new Chart(document.getElementById('servicesChart'), {
+    type: 'pie',
+    data: {
+        labels: [{{range $i, $s := .Data.TopServices}}{{if $i}},{{end}}"{{$s.Service}}"{{end}}],
+        datasets: [{
+            data: [{{range $i, $s := .Data.TopServices}}{{if $i}},{{end}}{{printf "%.2f" $s.TotalAmount}}{{end}}],
+            backgroundColor: ['#667eea','#764ba2','#f093fb','#4facfe','#00f2fe','#43e97b','#fa709a','#fee140','#a18cd1','#fbc2eb']
+        }]
+    },
+    options: { responsive: true, maintainAspectRatio: false }
+});
+</script>
+{{end}}
+{{end}}

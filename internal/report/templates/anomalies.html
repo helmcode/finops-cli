@@ -1,0 +1,27 @@
+{{template "base.html" .}}
+{{define "content"}}
+<div class="card">
+    <h2>Cost Anomalies</h2>
+    {{if .Data}}
+    <table>
+        <thead>
+            <tr><th>Period</th><th>Service</th><th>Expected</th><th>Actual</th><th>Deviation</th><th>Severity</th></tr>
+        </thead>
+        <tbody>
+            {{range .Data}}
+            <tr>
+                <td>{{.Period}}</td>
+                <td>{{.Service}}</td>
+                <td>${{printf "%.2f" .Expected}}</td>
+                <td>${{printf "%.2f" .Actual}}</td>
+                <td>{{printf "%.2f" .Deviation}}σ</td>
+                <td><span class="badge badge-{{.Severity}}">{{.Severity}}</span></td>
+            </tr>
+            {{end}}
+        </tbody>
+    </table>
+    {{else}}
+    <p>No anomalies detected in the selected period.</p>
+    {{end}}
+</div>
+{{end}}

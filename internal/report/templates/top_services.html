@@ -1,0 +1,22 @@
+{{template "base.html" .}}
+{{define "content"}}
+<div class="card">
+    <h2>Top Services by Cost</h2>
+    <table>
+        <thead>
+            <tr><th>#</th><th>Service</th><th>Total Cost</th><th>Monthly Average</th><th>% of Total</th></tr>
+        </thead>
+        <tbody>
+            {{range $i, $s := .Data.TopServices}}
+            <tr>
+                <td>{{add $i 1}}</td>
+                <td>{{$s.Service}}</td>
+                <td>${{printf "%.2f" $s.TotalAmount}}</td>
+                <td>${{printf "%.2f" (divf $s.TotalAmount (max $.MonthCount 1))}}</td>
+                <td>{{if $.Data.TotalSpend}}{{printf "%.1f" (divf (mulf $s.TotalAmount 100) $.Data.TotalSpend)}}%{{end}}</td>
+            </tr>
+            {{end}}
+        </tbody>
+    </table>
+</div>
+{{end}}

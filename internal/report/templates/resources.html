@@ -1,0 +1,27 @@
+{{template "base.html" .}}
+{{define "content"}}
+<div class="card">
+    <h2>Discovered Resources</h2>
+    {{if .Data}}
+    <table>
+        <thead>
+            <tr><th>Service</th><th>Resource ID</th><th>Type</th><th>Name</th><th>Region</th><th>State</th></tr>
+        </thead>
+        <tbody>
+            {{range .Data}}
+            <tr>
+                <td>{{.Service}}</td>
+                <td><code>{{.ResourceID}}</code></td>
+                <td>{{.ResourceType}}</td>
+                <td>{{if .Name.Valid}}{{.Name.String}}{{else}}-{{end}}</td>
+                <td>{{if .Region.Valid}}{{.Region.String}}{{else}}Global{{end}}</td>
+                <td>{{if .State.Valid}}{{.State.String}}{{else}}-{{end}}</td>
+            </tr>
+            {{end}}
+        </tbody>
+    </table>
+    {{else}}
+    <p>No resources discovered. Run <code>finops scan</code> first.</p>
+    {{end}}
+</div>
+{{end}}
