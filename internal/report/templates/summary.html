@@ -208,6 +208,12 @@
     </table>
     </div>
     {{end}}
+    {{if gt .SpotInstanceCount 0}}
+    <div style="margin-top: 1rem; padding: 0.75rem 1rem; background: rgba(79, 172, 254, 0.08); border-radius: 8px; border: 1px solid rgba(79, 172, 254, 0.15); display: flex; align-items: center; gap: 0.75rem;">
+        <span style="font-size: 1.3rem; color: #4facfe; font-weight: 700;">{{.SpotInstanceCount}}</span>
+        <span style="color: #d1d5db; font-size: 0.9rem;">Spot Instance{{if gt .SpotInstanceCount 1}}s{{end}} currently running</span>
+    </div>
+    {{end}}
     {{else if .PermissionWarning}}
     <div style="padding: 1rem; color: #f39c12; font-size: 0.9rem;">
         &#9888; Commitment data unavailable (insufficient permissions). Required: ce:GetSavingsPlans*, ce:GetReservation*

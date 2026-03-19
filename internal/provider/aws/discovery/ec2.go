@@ -66,8 +66,14 @@ func (d *EC2Discoverer) discoverInstances(ctx context.Context, client EC2API, ac
 
 	for _, reservation := range output.Reservations {
 		for _, inst := range reservation.Instances {
+			lifecycle := "on-demand"
+			if inst.InstanceLifecycle == ec2types.InstanceLifecycleTypeSpot {
+				lifecycle = "spot"
+			}
+
 			spec := map[string]string{
 				"instance_type": string(inst.InstanceType),
+				"lifecycle":     lifecycle,
 			}
 			if inst.PlatformDetails != nil {
 				spec["platform"] = *inst.PlatformDetails

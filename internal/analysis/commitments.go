@@ -24,6 +24,7 @@ type CommitmentOverview struct {
 	AvgUtilization    float64
 	Currency          string
 	Types             []CommitmentTypeSummary
+	SpotInstanceCount int64
 	HasData           bool
 	PermissionWarning bool
 }
@@ -82,8 +83,14 @@ func GenerateCommitmentOverview(q *store.Queries, provider string, dr DateRange)
 		overview.AvgUtilization = (overview.TotalUsed / overview.TotalCommitted) * 100
 	}
 
-	// Mark as having data if we have any commitment types with non-zero values
-	if len(overview.Types) > 0 {
+	// Count spot instances
+	spotCount, err := q.CountSpotInstances(ctx, provider)
+	if err == nil {
+		overview.SpotInstanceCount = spotCount
+	}
+
+	// Mark as having data if we have any commitment types or spot instances
+	if len(overview.Types) > 0 || overview.SpotInstanceCount > 0 {
 		overview.HasData = true
 	}
 

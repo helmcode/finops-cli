@@ -49,6 +49,10 @@ WHERE provider = ?
 GROUP BY service
 ORDER BY count DESC;
 
+-- name: CountSpotInstances :one
+SELECT COUNT(*) FROM resources
+WHERE provider = ? AND resource_type = 'ec2:instance' AND spec LIKE '%"lifecycle":"spot"%';
+
 -- name: CountResourcesByAccount :many
 SELECT account_id, COUNT(*) AS count FROM resources
 WHERE provider = ?

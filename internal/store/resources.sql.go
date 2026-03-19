@@ -102,6 +102,18 @@ func (q *Queries) CountResourcesByService(ctx context.Context, provider string) 
 	return items, nil
 }
 
+const countSpotInstances = `-- name: CountSpotInstances :one
+SELECT COUNT(*) FROM resources
+WHERE provider = ? AND resource_type = 'ec2:instance' AND spec LIKE '%"lifecycle":"spot"%'
+`
+
+func (q *Queries) CountSpotInstances(ctx context.Context, provider string) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countSpotInstances, provider)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const deleteResourcesByAccount = `-- name: DeleteResourcesByAccount :exec
 DELETE FROM resources WHERE provider = ? AND account_id = ?
 `
