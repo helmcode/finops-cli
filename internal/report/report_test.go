@@ -1,11 +1,13 @@
 package report
 
 import (
+	database_sql "database/sql"
 	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/helmcode/finops-cli/internal/analysis"
+	"github.com/helmcode/finops-cli/internal/store"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -83,20 +85,18 @@ func TestGenerateSummaryCSV(t *testing.T) {
 	tmpDir := t.TempDir()
 	outputPath := filepath.Join(tmpDir, "summary.csv")
 
-	data := &analysis.SummaryData{
-		TopServices: []analysis.ServiceCost{
-			{Service: "Amazon EC2", TotalAmount: 3000.0, Currency: "USD"},
-			{Service: "Amazon RDS", TotalAmount: 1500.0, Currency: "USD"},
-		},
+	rows := []store.GetCostByAccountAndServiceRow{
+		{AccountID: "123456789012", Service: "Amazon EC2", Region: database_sql.NullString{String: "us-east-1", Valid: true}, TotalAmount: database_sql.NullFloat64{Float64: 3000.0, Valid: true}, Currency: "USD"},
+		{AccountID: "123456789012", Service: "Amazon RDS", Region: database_sql.NullString{String: "us-west-2", Valid: true}, TotalAmount: database_sql.NullFloat64{Float64: 1500.0, Valid: true}, Currency: "USD"},
 	}
 
-	err := GenerateSummaryCSV(outputPath, data)
+	err := GenerateSummaryCSV(outputPath, rows)
 	require.NoError(t, err)
 
 	content, err := os.ReadFile(outputPath)
 	require.NoError(t, err)
-	assert.Contains(t, string(content), "Service,Total Cost,Currency")
-	assert.Contains(t, string(content), "Amazon EC2,3000.00,USD")
+	assert.Contains(t, string(content), "Account ID,Service,Region,Total Cost,Currency")
+	assert.Contains(t, string(content), "123456789012,Amazon EC2,us-east-1,3000.00,USD")
 }
 
 func TestGenerateTrendCSV(t *testing.T) {
