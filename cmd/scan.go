@@ -192,23 +192,28 @@ func runScan(cmd *cobra.Command, args []string) error {
 			costCount++
 		}
 
-		// Discover resources for each service with spend
+		// Discover resources for each service+region pair with spend
 		sp.Suffix = fmt.Sprintf(" Discovering resources for account %s...", acct.ID)
 		resourceCount := 0
-		discoveredServices := make(map[string]bool)
+		discoveredPairs := make(map[string]bool)
 
 		for _, record := range costRecords {
-			if discoveredServices[record.Service] {
-				continue
-			}
-			discoveredServices[record.Service] = true
-
 			region := record.Region
 			if region == "" || scanRegion != "all" {
 				if scanRegion != "all" {
 					region = scanRegion
 				}
 			}
+
+			// Skip empty regions (e.g., Tax, Support) and deduplicate by service+region
+			if region == "" || region == "NoRegion" {
+				continue
+			}
+			pairKey := record.Service + "|" + region
+			if discoveredPairs[pairKey] {
+				continue
+			}
+			discoveredPairs[pairKey] = true
 
 			resources, err := provider.DiscoverResources(record.Service, region)
 			if err != nil {
