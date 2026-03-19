@@ -25,19 +25,37 @@ func GeneratePDF(htmlPath, pdfPath string) error {
 		return fmt.Errorf("resolving HTML path: %w", err)
 	}
 
-	ctx, cancel := chromedp.NewContext(context.Background())
+	// Use a wide window so Chart.js canvases render at full size.
+	opts := append(chromedp.DefaultExecAllocatorOptions[:],
+		chromedp.WindowSize(1400, 900),
+	)
+	allocCtx, allocCancel := chromedp.NewExecAllocator(context.Background(), opts...)
+	defer allocCancel()
+
+	ctx, cancel := chromedp.NewContext(allocCtx)
 	defer cancel()
 
-	ctx, cancel = context.WithTimeout(ctx, 30*time.Second)
+	ctx, cancel = context.WithTimeout(ctx, 60*time.Second)
 	defer cancel()
 
 	var buf []byte
 	if err := chromedp.Run(ctx,
+		chromedp.EmulateViewport(1400, 900),
 		chromedp.Navigate("file://"+absHTML),
 		chromedp.WaitReady("body"),
+		// Wait for Chart.js to load from CDN and render all canvas charts.
+		chromedp.Sleep(3*time.Second),
 		chromedp.ActionFunc(func(ctx context.Context) error {
 			var err error
-			buf, _, err = page.PrintToPDF().WithPrintBackground(true).Do(ctx)
+			buf, _, err = page.PrintToPDF().
+				WithPrintBackground(true).
+				WithLandscape(true).
+				WithScale(0.75).
+				WithMarginTop(0.4).
+				WithMarginBottom(0.4).
+				WithMarginLeft(0.4).
+				WithMarginRight(0.4).
+				Do(ctx)
 			return err
 		}),
 	); err != nil {

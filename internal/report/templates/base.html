@@ -221,6 +221,20 @@
             .metrics-row { flex-direction: column; }
             .metric .value { font-size: 1.5rem; }
         }
+
+        /* Print / PDF page break rules */
+        @media print {
+            .header { break-inside: avoid; }
+            .card h2 { break-after: avoid; }
+            .metrics-row { break-inside: avoid; }
+            .metric { break-inside: avoid; }
+            .chart-container { break-inside: avoid; }
+            tr { break-inside: avoid; }
+            thead { display: table-header-group; }
+            .collapsible { break-inside: avoid; break-after: avoid; }
+            .collapsible-content { break-before: avoid; }
+            .footer { break-inside: avoid; }
+        }
     </style>
 </head>
 <body>
