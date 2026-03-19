@@ -69,7 +69,7 @@ var reportResourcesCmd = &cobra.Command{
 
 func init() {
 	// Shared flags
-	reportCmd.PersistentFlags().StringVar(&reportOutput, "output", "html", "Output format: html, csv, pdf")
+	reportCmd.PersistentFlags().StringVar(&reportOutput, "output", "html", "Output format: html, csv, json, pdf")
 	reportCmd.PersistentFlags().StringVar(&reportFile, "file", "", "Output file path (default: auto-generated)")
 
 	// Per-subcommand flags
@@ -263,6 +263,10 @@ func runReportSummary(cmd *cobra.Command, args []string) error {
 
 	path := outputPath("summary")
 	switch reportOutput {
+	case "json":
+		if err := report.GenerateSummaryJSON(path, reportData); err != nil {
+			return err
+		}
 	case "csv":
 		csvRows, err := s.Queries.GetCostByAccountAndService(ctx, store.GetCostByAccountAndServiceParams{
 			Provider:    "aws",
@@ -318,6 +322,13 @@ func runReportTopServices(cmd *cobra.Command, args []string) error {
 
 	path := outputPath("top_services")
 	switch reportOutput {
+	case "json":
+		if err := report.GenerateSummaryJSON(path, report.ReportData{
+			Title: "Top Services", PeriodStart: dr.Start, PeriodEnd: dr.End,
+			Data: summaryData,
+		}); err != nil {
+			return err
+		}
 	case "csv":
 		csvRows, err := s.Queries.GetCostByAccountAndService(context.Background(), store.GetCostByAccountAndServiceParams{
 			Provider:    "aws",
@@ -362,6 +373,10 @@ func runReportTrend(cmd *cobra.Command, args []string) error {
 	dr := defaultDateRange()
 	path := outputPath("trend")
 	switch reportOutput {
+	case "json":
+		if err := report.GenerateTrendJSON(path, trendData); err != nil {
+			return err
+		}
 	case "csv":
 		if err := report.GenerateTrendCSV(path, trendData); err != nil {
 			return err
@@ -398,6 +413,10 @@ func runReportAnomalies(cmd *cobra.Command, args []string) error {
 
 	path := outputPath("anomalies")
 	switch reportOutput {
+	case "json":
+		if err := report.GenerateAnomaliesJSON(path, anomalies); err != nil {
+			return err
+		}
 	case "csv":
 		if err := report.GenerateAnomaliesCSV(path, anomalies); err != nil {
 			return err
@@ -447,6 +466,10 @@ func runReportCompare(cmd *cobra.Command, args []string) error {
 
 	path := outputPath("compare")
 	switch reportOutput {
+	case "json":
+		if err := report.GenerateCompareJSON(path, compareData, currentDR, previousDR); err != nil {
+			return err
+		}
 	case "csv":
 		if err := report.GenerateCompareCSV(path, compareData); err != nil {
 			return err
@@ -509,6 +532,10 @@ func runReportResources(cmd *cobra.Command, args []string) error {
 	dr := defaultDateRange()
 	path := outputPath("resources")
 	switch reportOutput {
+	case "json":
+		if err := report.GenerateResourcesJSON(path, resources); err != nil {
+			return err
+		}
 	default:
 		if err := report.GenerateHTML("resources", path, report.ReportData{
 			Title:       "Discovered Resources",
