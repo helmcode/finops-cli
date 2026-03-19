@@ -1,17 +1,19 @@
 {{template "base.html" .}}
 {{define "content"}}
 <div class="card">
-    <div class="metric">
-        <div class="value">${{printf "%.2f" .Data.TotalPrevious}}</div>
-        <div class="label">Previous Period</div>
-    </div>
-    <div class="metric">
-        <div class="value">${{printf "%.2f" .Data.TotalCurrent}}</div>
-        <div class="label">Current Period</div>
-    </div>
-    <div class="metric">
-        <div class="value {{if gt .Data.TotalChange 0.0}}positive{{else}}negative{{end}}">${{printf "%.2f" .Data.TotalChange}} ({{printf "%.1f" .Data.TotalPercent}}%)</div>
-        <div class="label">Change</div>
+    <div class="metrics-row">
+        <div class="metric">
+            <div class="value">${{formatMoney .Data.TotalPrevious}}</div>
+            <div class="label">Previous Period</div>
+        </div>
+        <div class="metric">
+            <div class="value">${{formatMoney .Data.TotalCurrent}}</div>
+            <div class="label">Current Period</div>
+        </div>
+        <div class="metric">
+            <div class="value {{if gt .Data.TotalChange 0.0}}positive{{else}}negative{{end}}">${{formatMoney .Data.TotalChange}} ({{printf "%.1f" .Data.TotalPercent}}%)</div>
+            <div class="label">Change</div>
+        </div>
     </div>
 </div>
 
@@ -25,9 +27,9 @@
             {{range .Data.ServiceDeltas}}
             <tr>
                 <td>{{.Service}}</td>
-                <td>${{printf "%.2f" .PreviousAmount}}</td>
-                <td>${{printf "%.2f" .CurrentAmount}}</td>
-                <td class="{{if gt .AbsoluteChange 0.0}}positive{{else}}negative{{end}}">${{printf "%.2f" .AbsoluteChange}}</td>
+                <td>${{formatMoney .PreviousAmount}}</td>
+                <td>${{formatMoney .CurrentAmount}}</td>
+                <td class="{{if gt .AbsoluteChange 0.0}}positive{{else}}negative{{end}}">${{formatMoney .AbsoluteChange}}</td>
                 <td class="{{if gt .PercentChange 0.0}}positive{{else}}negative{{end}}">{{printf "%.1f" .PercentChange}}%</td>
             </tr>
             {{end}}

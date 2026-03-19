@@ -1,17 +1,19 @@
 {{template "base.html" .}}
 {{define "content"}}
 <div class="card">
-    <div class="metric">
-        <div class="value">${{printf "%.2f" .Data.TotalSpend}}</div>
-        <div class="label">Total Spend ({{.Data.Currency}})</div>
-    </div>
-    <div class="metric">
-        <div class="value">{{len .Data.TopServices}}</div>
-        <div class="label">Active Services</div>
-    </div>
-    <div class="metric">
-        <div class="value">{{.TotalResources}}</div>
-        <div class="label">Resources Discovered</div>
+    <div class="metrics-row">
+        <div class="metric">
+            <div class="value">${{formatMoney .Data.TotalSpend}}</div>
+            <div class="label">Total Spend ({{.Data.Currency}})</div>
+        </div>
+        <div class="metric">
+            <div class="value">{{len .Data.TopServices}}</div>
+            <div class="label">Active Services</div>
+        </div>
+        <div class="metric">
+            <div class="value">{{.TotalResources}}</div>
+            <div class="label">Resources Discovered</div>
+        </div>
     </div>
 </div>
 
@@ -29,7 +31,7 @@
             {{range .Data.TopServices}}
             <tr>
                 <td>{{.Service}}</td>
-                <td>${{printf "%.2f" .TotalAmount}}</td>
+                <td>${{formatMoney .TotalAmount}}</td>
                 <td>{{if $.Data.TotalSpend}}{{printf "%.1f" (divf (mulf .TotalAmount 100) $.Data.TotalSpend)}}%{{end}}</td>
             </tr>
             {{end}}
@@ -38,7 +40,43 @@
 </div>
 {{end}}
 
-{{if .Data.CostByRegion}}
+{{if .RegionDetails}}
+<div class="card">
+    <h2>Cost by Region</h2>
+    {{range .RegionDetails}}
+    <div class="collapsible">
+        <div class="region-info">
+            <span class="region-name">{{if .Region}}{{.Region}}{{else}}Global{{end}}</span>
+            <span class="region-cost">${{formatMoney .TotalAmount}}</span>
+            {{if .Resources}}<span class="resource-count">{{len .Resources}} resource{{if gt (len .Resources) 1}}s{{end}}</span>{{end}}
+        </div>
+        <span class="arrow">&#9654;</span>
+    </div>
+    <div class="collapsible-content">
+        {{if .Resources}}
+        <table>
+            <thead>
+                <tr><th>Service</th><th>Type</th><th>Name</th><th>Resource ID</th><th>State</th></tr>
+            </thead>
+            <tbody>
+                {{range .Resources}}
+                <tr>
+                    <td>{{.Service}}</td>
+                    <td>{{.ResourceType}}</td>
+                    <td>{{if .Name.Valid}}{{.Name.String}}{{else}}-{{end}}</td>
+                    <td><code>{{.ResourceID}}</code></td>
+                    <td>{{if .State.Valid}}{{.State.String}}{{else}}-{{end}}</td>
+                </tr>
+                {{end}}
+            </tbody>
+        </table>
+        {{else}}
+        <div style="padding: 1rem; color: #4a5568; font-size: 0.9rem;">No resource details available for this region.</div>
+        {{end}}
+    </div>
+    {{end}}
+</div>
+{{else if .Data.CostByRegion}}
 <div class="card">
     <h2>Cost by Region</h2>
     <table>
@@ -49,7 +87,7 @@
             {{range .Data.CostByRegion}}
             <tr>
                 <td>{{if .Region}}{{.Region}}{{else}}Global{{end}}</td>
-                <td>${{printf "%.2f" .TotalAmount}}</td>
+                <td>${{formatMoney .TotalAmount}}</td>
             </tr>
             {{end}}
         </tbody>
@@ -65,10 +103,25 @@ new Chart(document.getElementById('servicesChart'), {
         labels: [{{range $i, $s := .Data.TopServices}}{{if $i}},{{end}}"{{$s.Service}}"{{end}}],
         datasets: [{
             data: [{{range $i, $s := .Data.TopServices}}{{if $i}},{{end}}{{printf "%.2f" $s.TotalAmount}}{{end}}],
-            backgroundColor: ['#667eea','#764ba2','#f093fb','#4facfe','#00f2fe','#43e97b','#fa709a','#fee140','#a18cd1','#fbc2eb']
+            backgroundColor: ['#6c62ff','#8b7fff','#ff80b5','#4facfe','#22c55e','#f39c12','#ff5f57','#9089fc','#4f39f6','#ff4694'],
+            borderWidth: 0
         }]
     },
-    options: { responsive: true, maintainAspectRatio: false }
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: { position: 'right', labels: { padding: 16, usePointStyle: true, font: { size: 13 } } },
+            tooltip: {
+                callbacks: {
+                    label: function(ctx) {
+                        var val = ctx.parsed;
+                        return ctx.label + ': $' + val.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                    }
+                }
+            }
+        }
+    }
 });
 </script>
 {{end}}

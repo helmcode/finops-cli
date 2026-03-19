@@ -11,8 +11,8 @@
             <tr>
                 <td>{{add $i 1}}</td>
                 <td>{{$s.Service}}</td>
-                <td>${{printf "%.2f" $s.TotalAmount}}</td>
-                <td>${{printf "%.2f" (divf $s.TotalAmount (max $.MonthCount 1))}}</td>
+                <td>${{formatMoney $s.TotalAmount}}</td>
+                <td>${{formatMoney (divf $s.TotalAmount (max $.MonthCount 1))}}</td>
                 <td>{{if $.Data.TotalSpend}}{{printf "%.1f" (divf (mulf $s.TotalAmount 100) $.Data.TotalSpend)}}%{{end}}</td>
             </tr>
             {{end}}

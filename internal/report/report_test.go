@@ -48,7 +48,7 @@ func TestGenerateHTML_Summary(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, string(content), "Cost Summary")
 	assert.Contains(t, string(content), "Amazon EC2")
-	assert.Contains(t, string(content), "5000.00")
+	assert.Contains(t, string(content), "5,000.00")
 }
 
 func TestGenerateHTML_Trend(t *testing.T) {
@@ -76,7 +76,7 @@ func TestGenerateHTML_Trend(t *testing.T) {
 	content, err := os.ReadFile(outputPath)
 	require.NoError(t, err)
 	assert.Contains(t, string(content), "Amazon EC2")
-	assert.Contains(t, string(content), "1100.00")
+	assert.Contains(t, string(content), "1,100.00")
 }
 
 func TestGenerateSummaryCSV(t *testing.T) {

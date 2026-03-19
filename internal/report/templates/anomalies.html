@@ -12,16 +12,16 @@
             <tr>
                 <td>{{.Period}}</td>
                 <td>{{.Service}}</td>
-                <td>${{printf "%.2f" .Expected}}</td>
-                <td>${{printf "%.2f" .Actual}}</td>
-                <td>{{printf "%.2f" .Deviation}}σ</td>
+                <td>${{formatMoney .Expected}}</td>
+                <td>${{formatMoney .Actual}}</td>
+                <td>{{printf "%.2f" .Deviation}}&#963;</td>
                 <td><span class="badge badge-{{.Severity}}">{{.Severity}}</span></td>
             </tr>
             {{end}}
         </tbody>
     </table>
     {{else}}
-    <p>No anomalies detected in the selected period.</p>
+    <p style="padding: 1rem; color: #4a5568;">No anomalies detected in the selected period.</p>
     {{end}}
 </div>
 {{end}}

@@ -2,13 +2,15 @@
 {{define "content"}}
 <div class="card">
     <h2>Cost Trend{{if .Data.Service}} — {{.Data.Service}}{{end}}</h2>
-    <div class="metric">
-        <div class="value">${{printf "%.2f" .Data.AvgMonthly}}</div>
-        <div class="label">Monthly Average</div>
-    </div>
-    <div class="metric">
-        <div class="value">{{.Data.Direction}}</div>
-        <div class="label">Trend Direction</div>
+    <div class="metrics-row">
+        <div class="metric">
+            <div class="value">${{formatMoney .Data.AvgMonthly}}</div>
+            <div class="label">Monthly Average</div>
+        </div>
+        <div class="metric">
+            <div class="value">{{.Data.Direction}}</div>
+            <div class="label">Trend Direction</div>
+        </div>
     </div>
     <div class="chart-container">
         <canvas id="trendChart"></canvas>
@@ -23,16 +25,41 @@ new Chart(document.getElementById('trendChart'), {
         datasets: [{
             label: '{{if .Data.Service}}{{.Data.Service}}{{else}}Total Cost{{end}}',
             data: [{{range $i, $d := .Data.DataPoints}}{{if $i}},{{end}}{{printf "%.2f" $d.Amount}}{{end}}],
-            borderColor: '#667eea',
-            backgroundColor: 'rgba(102,126,234,0.1)',
+            borderColor: '#6c62ff',
+            backgroundColor: 'rgba(108, 98, 255, 0.08)',
             fill: true,
-            tension: 0.3
+            tension: 0.3,
+            pointBackgroundColor: '#6c62ff',
+            pointBorderColor: '#fff',
+            pointBorderWidth: 2,
+            pointRadius: 5,
+            pointHoverRadius: 7
         }]
     },
     options: {
         responsive: true,
         maintainAspectRatio: false,
-        scales: { y: { beginAtZero: true, ticks: { callback: function(v) { return '$' + v; } } } }
+        plugins: {
+            tooltip: {
+                callbacks: {
+                    label: function(ctx) {
+                        return '$' + ctx.parsed.y.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                    }
+                }
+            }
+        },
+        scales: {
+            y: {
+                beginAtZero: true,
+                ticks: {
+                    callback: function(v) { return '$' + v.toLocaleString('en-US'); }
+                },
+                grid: { color: 'rgba(108, 98, 255, 0.06)' }
+            },
+            x: {
+                grid: { display: false }
+            }
+        }
     }
 });
 </script>

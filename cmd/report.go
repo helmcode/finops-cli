@@ -159,6 +159,32 @@ func runReportSummary(cmd *cobra.Command, args []string) error {
 	ctx := context.Background()
 	resourceCount, _ := s.Queries.CountResourcesByProvider(ctx, "aws")
 
+	// Build region details with associated resources for collapsible sections
+	var regionDetails []report.RegionDetail
+	for _, rc := range summaryData.CostByRegion {
+		rd := report.RegionDetail{
+			Region:      rc.Region,
+			TotalAmount: rc.TotalAmount,
+			Currency:    rc.Currency,
+		}
+		if rc.Region != "" {
+			resources, err := s.Queries.GetResourcesByRegion(ctx, store.GetResourcesByRegionParams{
+				Provider: "aws",
+				Region:   sql.NullString{String: rc.Region, Valid: true},
+			})
+			if err == nil {
+				rd.Resources = resources
+			}
+		}
+		regionDetails = append(regionDetails, rd)
+	}
+
+	reportData := report.ReportData{
+		Title: "Cost Summary", PeriodStart: dr.Start, PeriodEnd: dr.End,
+		Data: summaryData, TotalResources: resourceCount, MonthCount: 6,
+		RegionDetails: regionDetails,
+	}
+
 	path := outputPath("summary")
 	switch reportOutput {
 	case "csv":
@@ -167,10 +193,7 @@ func runReportSummary(cmd *cobra.Command, args []string) error {
 		}
 	case "pdf":
 		htmlPath := path + ".html"
-		if err := report.GenerateHTML("summary", htmlPath, report.ReportData{
-			Title: "Cost Summary", PeriodStart: dr.Start, PeriodEnd: dr.End,
-			Data: summaryData, TotalResources: resourceCount, MonthCount: 6,
-		}); err != nil {
+		if err := report.GenerateHTML("summary", htmlPath, reportData); err != nil {
 			return err
 		}
 		if err := report.GeneratePDF(htmlPath, path); err != nil {
@@ -178,10 +201,7 @@ func runReportSummary(cmd *cobra.Command, args []string) error {
 		}
 		os.Remove(htmlPath)
 	default:
-		if err := report.GenerateHTML("summary", path, report.ReportData{
-			Title: "Cost Summary", PeriodStart: dr.Start, PeriodEnd: dr.End,
-			Data: summaryData, TotalResources: resourceCount, MonthCount: 6,
-		}); err != nil {
+		if err := report.GenerateHTML("summary", path, reportData); err != nil {
 			return err
 		}
 	}
