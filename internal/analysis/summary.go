@@ -3,6 +3,7 @@ package analysis
 import (
 	"context"
 	"fmt"
+	"log/slog"
 
 	"github.com/helmcode/finops-cli/internal/store"
 )
@@ -27,6 +28,14 @@ type ResourceCount struct {
 	Count   int64
 }
 
+// AccountCost represents cost data for a single account.
+type AccountCost struct {
+	AccountID     string
+	TotalAmount   float64
+	Currency      string
+	ResourceCount int64
+}
+
 // SummaryData contains all aggregated data for a summary report.
 type SummaryData struct {
 	TotalSpend     float64
@@ -34,6 +43,7 @@ type SummaryData struct {
 	TopServices    []ServiceCost
 	CostByRegion   []RegionCost
 	ResourceCounts []ResourceCount
+	CostByAccount  []AccountCost
 	TrendChange    float64 // Percentage change vs previous period
 	PeriodStart    string
 	PeriodEnd      string
@@ -117,12 +127,47 @@ func GenerateSummary(q *store.Queries, provider string, dr DateRange) (*SummaryD
 		})
 	}
 
+	// Get costs by account
+	accountRows, err := q.GetTotalCostByAccount(ctx, store.GetTotalCostByAccountParams{
+		Provider:    provider,
+		PeriodStart: dr.Start,
+		PeriodEnd:   dr.End,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("getting costs by account: %w", err)
+	}
+
+	// Get resource counts by account
+	accountResourceRows, err := q.CountResourcesByAccount(ctx, provider)
+	if err != nil {
+		slog.Debug("could not get resource counts by account", "error", err)
+	}
+	accountResourceMap := make(map[string]int64)
+	for _, row := range accountResourceRows {
+		accountResourceMap[row.AccountID] = row.Count
+	}
+
+	var costByAccount []AccountCost
+	for _, row := range accountRows {
+		amount := 0.0
+		if row.TotalAmount.Valid {
+			amount = row.TotalAmount.Float64
+		}
+		costByAccount = append(costByAccount, AccountCost{
+			AccountID:     row.AccountID,
+			TotalAmount:   amount,
+			Currency:      row.Currency,
+			ResourceCount: accountResourceMap[row.AccountID],
+		})
+	}
+
 	return &SummaryData{
 		TotalSpend:     totalSpend,
 		Currency:       currency,
 		TopServices:    topServices,
 		CostByRegion:   costByRegion,
 		ResourceCounts: resourceCounts,
+		CostByAccount:  costByAccount,
 		PeriodStart:    dr.Start,
 		PeriodEnd:      dr.End,
 	}, nil

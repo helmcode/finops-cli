@@ -269,6 +269,51 @@ func runScan(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	// Fetch commitment data (Savings Plans, Reserved Instances)
+	sp = spinner.New(spinner.CharSets[14], 100*time.Millisecond)
+	sp.Suffix = " Fetching commitment data (Savings Plans, Reserved Instances)..."
+	sp.Start()
+
+	commitmentCount := 0
+	for _, acct := range accounts {
+		commitRecords, err := provider.FetchCommitments(providerpkg.CommitmentParams{
+			AccountID: acct.ID,
+			Start:     start,
+			End:       end,
+		})
+		if err != nil {
+			slog.Debug("could not fetch commitments", "account", acct.ID, "error", err)
+			continue
+		}
+		for _, cr := range commitRecords {
+			err := s.Queries.UpsertCommitment(ctx, store.UpsertCommitmentParams{
+				Provider:           cr.Provider,
+				AccountID:          cr.AccountID,
+				CommitmentType:     cr.CommitmentType,
+				PeriodStart:        cr.PeriodStart,
+				PeriodEnd:          cr.PeriodEnd,
+				TotalCommitment:    cr.TotalCommitment,
+				UsedCommitment:     cr.UsedCommitment,
+				OnDemandEquivalent: cr.OnDemandEquivalent,
+				NetSavings:         cr.NetSavings,
+				UtilizationPct:     cr.UtilizationPct,
+				CoveragePct:        cr.CoveragePct,
+				Currency:           cr.Currency,
+				SyncedAt:           time.Now().UTC().Format(time.RFC3339),
+			})
+			if err != nil {
+				slog.Debug("failed to store commitment record", "error", err)
+				continue
+			}
+			commitmentCount++
+		}
+	}
+	sp.Stop()
+
+	if commitmentCount > 0 && verbose {
+		fmt.Printf("  Commitment records: %d synced\n", commitmentCount)
+	}
+
 	// Auto-prune
 	retentionStr, err := s.Queries.GetConfig(ctx, "retention_months")
 	retention := 12

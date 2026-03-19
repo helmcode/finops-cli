@@ -21,6 +21,41 @@ func (q *Queries) CountResources(ctx context.Context) (int64, error) {
 	return count, err
 }
 
+const countResourcesByAccount = `-- name: CountResourcesByAccount :many
+SELECT account_id, COUNT(*) AS count FROM resources
+WHERE provider = ?
+GROUP BY account_id
+ORDER BY count DESC
+`
+
+type CountResourcesByAccountRow struct {
+	AccountID string `json:"account_id"`
+	Count     int64  `json:"count"`
+}
+
+func (q *Queries) CountResourcesByAccount(ctx context.Context, provider string) ([]CountResourcesByAccountRow, error) {
+	rows, err := q.db.QueryContext(ctx, countResourcesByAccount, provider)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []CountResourcesByAccountRow{}
+	for rows.Next() {
+		var i CountResourcesByAccountRow
+		if err := rows.Scan(&i.AccountID, &i.Count); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const countResourcesByProvider = `-- name: CountResourcesByProvider :one
 SELECT COUNT(*) FROM resources WHERE provider = ?
 `

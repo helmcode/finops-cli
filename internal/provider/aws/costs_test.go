@@ -27,6 +27,22 @@ func (m *mockCostExplorer) GetCostAndUsage(ctx context.Context, params *costexpl
 	return m.output, nil
 }
 
+func (m *mockCostExplorer) GetSavingsPlansUtilization(ctx context.Context, params *costexplorer.GetSavingsPlansUtilizationInput, optFns ...func(*costexplorer.Options)) (*costexplorer.GetSavingsPlansUtilizationOutput, error) {
+	return &costexplorer.GetSavingsPlansUtilizationOutput{}, nil
+}
+
+func (m *mockCostExplorer) GetSavingsPlansCoverage(ctx context.Context, params *costexplorer.GetSavingsPlansCoverageInput, optFns ...func(*costexplorer.Options)) (*costexplorer.GetSavingsPlansCoverageOutput, error) {
+	return &costexplorer.GetSavingsPlansCoverageOutput{}, nil
+}
+
+func (m *mockCostExplorer) GetReservationUtilization(ctx context.Context, params *costexplorer.GetReservationUtilizationInput, optFns ...func(*costexplorer.Options)) (*costexplorer.GetReservationUtilizationOutput, error) {
+	return &costexplorer.GetReservationUtilizationOutput{}, nil
+}
+
+func (m *mockCostExplorer) GetReservationCoverage(ctx context.Context, params *costexplorer.GetReservationCoverageInput, optFns ...func(*costexplorer.Options)) (*costexplorer.GetReservationCoverageOutput, error) {
+	return &costexplorer.GetReservationCoverageOutput{}, nil
+}
+
 func TestValidateDateRange(t *testing.T) {
 	now := time.Now()
 

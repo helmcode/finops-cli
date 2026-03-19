@@ -214,11 +214,51 @@ func runReportSummary(cmd *cobra.Command, args []string) error {
 		monthlySpend = trendData.DataPoints
 	}
 
+	// Build account details with top services per account
+	var accountDetails []report.AccountDetail
+	for _, acct := range summaryData.CostByAccount {
+		ad := report.AccountDetail{
+			AccountID:     acct.AccountID,
+			TotalAmount:   acct.TotalAmount,
+			Currency:      acct.Currency,
+			ResourceCount: acct.ResourceCount,
+		}
+		topSvcs, err := s.Queries.GetTopServicesByAccount(ctx, store.GetTopServicesByAccountParams{
+			Provider:    "aws",
+			AccountID:   acct.AccountID,
+			PeriodStart: dr.Start,
+			PeriodEnd:   dr.End,
+		})
+		if err == nil {
+			for _, svc := range topSvcs {
+				amount := 0.0
+				if svc.TotalAmount.Valid {
+					amount = svc.TotalAmount.Float64
+				}
+				if amount > 0 {
+					ad.TopServices = append(ad.TopServices, report.AccountServiceCost{
+						Service: svc.Service,
+						Amount:  amount,
+					})
+				}
+			}
+		}
+		accountDetails = append(accountDetails, ad)
+	}
+
+	// Get commitment overview
+	commitmentOverview, err := analysis.GenerateCommitmentOverview(s.Queries, "aws", dr)
+	if err != nil {
+		slog.Debug("could not generate commitment overview", "error", err)
+	}
+
 	reportData := report.ReportData{
 		Title: "Cost Summary", PeriodStart: dr.Start, PeriodEnd: dr.End,
 		Data: summaryData, TotalResources: resourceCount, MonthCount: 6,
-		RegionDetails: regionDetails,
-		MonthlySpend:  monthlySpend,
+		RegionDetails:     regionDetails,
+		MonthlySpend:      monthlySpend,
+		AccountDetails:    accountDetails,
+		CommitmentOverview: commitmentOverview,
 	}
 
 	path := outputPath("summary")

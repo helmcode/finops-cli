@@ -556,6 +556,99 @@ func (q *Queries) GetMonthlyCostTrendByService(ctx context.Context, arg GetMonth
 	return items, nil
 }
 
+const getTopServicesByAccount = `-- name: GetTopServicesByAccount :many
+SELECT service, SUM(amount) AS total_amount, currency
+FROM cost_records
+WHERE provider = ? AND account_id = ? AND period_start >= ? AND period_end <= ?
+GROUP BY service, currency
+ORDER BY total_amount DESC
+LIMIT 5
+`
+
+type GetTopServicesByAccountParams struct {
+	Provider    string `json:"provider"`
+	AccountID   string `json:"account_id"`
+	PeriodStart string `json:"period_start"`
+	PeriodEnd   string `json:"period_end"`
+}
+
+type GetTopServicesByAccountRow struct {
+	Service     string          `json:"service"`
+	TotalAmount sql.NullFloat64 `json:"total_amount"`
+	Currency    string          `json:"currency"`
+}
+
+func (q *Queries) GetTopServicesByAccount(ctx context.Context, arg GetTopServicesByAccountParams) ([]GetTopServicesByAccountRow, error) {
+	rows, err := q.db.QueryContext(ctx, getTopServicesByAccount,
+		arg.Provider,
+		arg.AccountID,
+		arg.PeriodStart,
+		arg.PeriodEnd,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetTopServicesByAccountRow{}
+	for rows.Next() {
+		var i GetTopServicesByAccountRow
+		if err := rows.Scan(&i.Service, &i.TotalAmount, &i.Currency); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getTotalCostByAccount = `-- name: GetTotalCostByAccount :many
+SELECT account_id, SUM(amount) AS total_amount, currency
+FROM cost_records
+WHERE provider = ? AND period_start >= ? AND period_end <= ?
+GROUP BY account_id, currency
+ORDER BY total_amount DESC
+`
+
+type GetTotalCostByAccountParams struct {
+	Provider    string `json:"provider"`
+	PeriodStart string `json:"period_start"`
+	PeriodEnd   string `json:"period_end"`
+}
+
+type GetTotalCostByAccountRow struct {
+	AccountID   string          `json:"account_id"`
+	TotalAmount sql.NullFloat64 `json:"total_amount"`
+	Currency    string          `json:"currency"`
+}
+
+func (q *Queries) GetTotalCostByAccount(ctx context.Context, arg GetTotalCostByAccountParams) ([]GetTotalCostByAccountRow, error) {
+	rows, err := q.db.QueryContext(ctx, getTotalCostByAccount, arg.Provider, arg.PeriodStart, arg.PeriodEnd)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetTotalCostByAccountRow{}
+	for rows.Next() {
+		var i GetTotalCostByAccountRow
+		if err := rows.Scan(&i.AccountID, &i.TotalAmount, &i.Currency); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getTotalCostByRegion = `-- name: GetTotalCostByRegion :many
 SELECT region, SUM(amount) AS total_amount, currency
 FROM cost_records

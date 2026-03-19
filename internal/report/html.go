@@ -56,6 +56,8 @@ var funcMap = template.FuncMap{
 	"mulf":        func(a, b float64) float64 { return a * b },
 	"max":         func(a, b float64) float64 { if a > b { return a }; return b },
 	"formatMoney": formatMoney,
+	"formatPct":   func(f float64) string { return fmt.Sprintf("%.1f", f) },
+	"gt0":         func(f float64) bool { return f > 0 },
 }
 
 // RegionServiceCost holds the cost of a single service within a region.
@@ -73,6 +75,21 @@ type RegionDetail struct {
 	ServiceCosts []RegionServiceCost
 }
 
+// AccountDetail holds cost and resource data for a single account.
+type AccountDetail struct {
+	AccountID     string
+	TotalAmount   float64
+	Currency      string
+	ResourceCount int64
+	TopServices   []AccountServiceCost
+}
+
+// AccountServiceCost holds the cost of a single service within an account.
+type AccountServiceCost struct {
+	Service string
+	Amount  float64
+}
+
 // ReportData is the common data structure passed to all templates.
 type ReportData struct {
 	Title          string
@@ -83,7 +100,9 @@ type ReportData struct {
 	TotalResources int64
 	MonthCount     float64
 	RegionDetails  []RegionDetail
-	MonthlySpend   []analysis.MonthlyDataPoint
+	MonthlySpend       []analysis.MonthlyDataPoint
+	AccountDetails     []AccountDetail
+	CommitmentOverview interface{}
 }
 
 // GenerateHTML renders a report template to an HTML file.

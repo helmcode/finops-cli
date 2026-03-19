@@ -87,6 +87,14 @@ func (s *Store) Prune(retentionMonths int) (int64, error) {
 		return 0, fmt.Errorf("getting rows affected: %w", err)
 	}
 
+	// Also prune commitments
+	commitResult, err := s.DB.Exec("DELETE FROM commitments WHERE period_start < ?", cutoff)
+	if err == nil {
+		if commitDeleted, e := commitResult.RowsAffected(); e == nil && commitDeleted > 0 {
+			slog.Info("pruned commitment records", "deleted", commitDeleted)
+		}
+	}
+
 	slog.Info("pruned cost records", "deleted", deleted)
 	return deleted, nil
 }

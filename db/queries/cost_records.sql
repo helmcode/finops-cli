@@ -99,6 +99,21 @@ SELECT DISTINCT region FROM cost_records
 WHERE provider = ? AND region IS NOT NULL
 ORDER BY region;
 
+-- name: GetTotalCostByAccount :many
+SELECT account_id, SUM(amount) AS total_amount, currency
+FROM cost_records
+WHERE provider = ? AND period_start >= ? AND period_end <= ?
+GROUP BY account_id, currency
+ORDER BY total_amount DESC;
+
+-- name: GetTopServicesByAccount :many
+SELECT service, SUM(amount) AS total_amount, currency
+FROM cost_records
+WHERE provider = ? AND account_id = ? AND period_start >= ? AND period_end <= ?
+GROUP BY service, currency
+ORDER BY total_amount DESC
+LIMIT 5;
+
 -- name: GetDistinctAccounts :many
 SELECT DISTINCT account_id FROM cost_records
 WHERE provider = ?

@@ -49,6 +49,12 @@ WHERE provider = ?
 GROUP BY service
 ORDER BY count DESC;
 
+-- name: CountResourcesByAccount :many
+SELECT account_id, COUNT(*) AS count FROM resources
+WHERE provider = ?
+GROUP BY account_id
+ORDER BY count DESC;
+
 -- name: DeleteResourcesByProvider :exec
 DELETE FROM resources WHERE provider = ?;
 

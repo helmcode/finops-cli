@@ -17,6 +17,47 @@
     </div>
 </div>
 
+{{if .AccountDetails}}
+<div class="card">
+    <h2>Cost by Account</h2>
+    {{if gt (len .AccountDetails) 1}}
+    <div class="chart-container" style="height: 300px;">
+        <canvas id="accountsChart"></canvas>
+    </div>
+    {{end}}
+    {{range .AccountDetails}}
+    <div class="collapsible">
+        <div class="region-info">
+            <span class="region-name">{{.AccountID}}</span>
+            <span class="region-cost">${{formatMoney .TotalAmount}}</span>
+            {{if gt .ResourceCount 0}}<span class="resource-count">{{.ResourceCount}} resource{{if gt .ResourceCount 1}}s{{end}}</span>{{end}}
+            <span class="resource-count">{{if $.Data.TotalSpend}}{{printf "%.1f" (divf (mulf .TotalAmount 100) $.Data.TotalSpend)}}%{{end}}</span>
+        </div>
+        <span class="arrow">&#9654;</span>
+    </div>
+    <div class="collapsible-content">
+        {{if .TopServices}}
+        <table>
+            <thead>
+                <tr><th>Service</th><th>Cost</th></tr>
+            </thead>
+            <tbody>
+                {{range .TopServices}}
+                <tr>
+                    <td>{{.Service}}</td>
+                    <td>${{formatMoney .Amount}}</td>
+                </tr>
+                {{end}}
+            </tbody>
+        </table>
+        {{else}}
+        <div style="padding: 1rem; color: #6b7280; font-size: 0.9rem;">No service details available.</div>
+        {{end}}
+    </div>
+    {{end}}
+</div>
+{{end}}
+
 {{if .MonthlySpend}}
 <div class="card">
     <h2>Monthly Spend</h2>
@@ -122,6 +163,109 @@
     </table>
     </div>
 </div>
+{{end}}
+
+{{if .CommitmentOverview}}
+<div class="card">
+    <h2>Commitments &amp; Savings</h2>
+    {{with .CommitmentOverview}}
+    {{if .HasData}}
+    <div class="metrics-row">
+        <div class="metric">
+            <div class="value">${{formatMoney .TotalCommitted}}</div>
+            <div class="label">Total Committed ({{.Currency}})</div>
+        </div>
+        <div class="metric">
+            <div class="value">{{formatPct .AvgUtilization}}%</div>
+            <div class="label">Avg. Utilization</div>
+        </div>
+        <div class="metric">
+            <div class="value" style="color: #22c55e;">${{formatMoney .TotalSavings}}</div>
+            <div class="label">Net Savings</div>
+        </div>
+    </div>
+    {{if .Types}}
+    <div class="table-wrap" style="margin-top: 1.25rem;">
+    <table>
+        <thead>
+            <tr>
+                <th>Type</th>
+                <th>Committed</th>
+                <th>Used</th>
+                <th>Savings</th>
+            </tr>
+        </thead>
+        <tbody>
+            {{range .Types}}
+            <tr>
+                <td>{{if eq .Type "savings_plan"}}Savings Plans{{else if eq .Type "reserved_instance"}}Reserved Instances{{else}}{{.Type}}{{end}}</td>
+                <td>${{formatMoney .TotalCommitment}}</td>
+                <td>${{formatMoney .UsedCommitment}}</td>
+                <td style="color: #22c55e;">${{formatMoney .NetSavings}}</td>
+            </tr>
+            {{end}}
+        </tbody>
+    </table>
+    </div>
+    {{end}}
+    {{else if .PermissionWarning}}
+    <div style="padding: 1rem; color: #f39c12; font-size: 0.9rem;">
+        &#9888; Commitment data unavailable (insufficient permissions). Required: ce:GetSavingsPlans*, ce:GetReservation*
+    </div>
+    {{else}}
+    <div style="padding: 1rem; color: #6b7280; font-size: 0.9rem;">
+        No active Savings Plans or Reserved Instances detected for this period.
+    </div>
+    {{end}}
+    {{end}}
+</div>
+{{end}}
+
+{{if .AccountDetails}}
+{{if gt (len .AccountDetails) 1}}
+<script>
+new Chart(document.getElementById('accountsChart'), {
+    type: 'bar',
+    data: {
+        labels: [{{range $i, $a := .AccountDetails}}{{if $i}},{{end}}"{{$a.AccountID}}"{{end}}],
+        datasets: [{
+            label: 'Account Spend',
+            data: [{{range $i, $a := .AccountDetails}}{{if $i}},{{end}}{{printf "%.2f" $a.TotalAmount}}{{end}}],
+            backgroundColor: ['#6c62ff','#8b7fff','#ff80b5','#4facfe','#22c55e','#f39c12','#ff5f57','#9089fc','#4f39f6','#ff4694'],
+            borderWidth: 0,
+            borderRadius: 6
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        indexAxis: 'y',
+        plugins: {
+            legend: { display: false },
+            tooltip: {
+                callbacks: {
+                    label: function(ctx) {
+                        return '$' + ctx.parsed.x.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                    }
+                }
+            }
+        },
+        scales: {
+            x: {
+                beginAtZero: true,
+                ticks: {
+                    callback: function(v) { return '$' + v.toLocaleString('en-US'); }
+                },
+                grid: { color: 'rgba(255, 255, 255, 0.04)' }
+            },
+            y: {
+                grid: { display: false }
+            }
+        }
+    }
+});
+</script>
+{{end}}
 {{end}}
 
 {{if .MonthlySpend}}

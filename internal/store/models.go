@@ -8,6 +8,23 @@ import (
 	"database/sql"
 )
 
+type Commitment struct {
+	ID                 int64   `json:"id"`
+	Provider           string  `json:"provider"`
+	AccountID          string  `json:"account_id"`
+	CommitmentType     string  `json:"commitment_type"`
+	PeriodStart        string  `json:"period_start"`
+	PeriodEnd          string  `json:"period_end"`
+	TotalCommitment    float64 `json:"total_commitment"`
+	UsedCommitment     float64 `json:"used_commitment"`
+	OnDemandEquivalent float64 `json:"on_demand_equivalent"`
+	NetSavings         float64 `json:"net_savings"`
+	UtilizationPct     float64 `json:"utilization_pct"`
+	CoveragePct        float64 `json:"coverage_pct"`
+	Currency           string  `json:"currency"`
+	SyncedAt           string  `json:"synced_at"`
+}
+
 type Config struct {
 	Key   string `json:"key"`
 	Value string `json:"value"`

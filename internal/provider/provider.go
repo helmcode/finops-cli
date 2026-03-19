@@ -20,6 +20,9 @@ type Provider interface {
 	// FetchCosts retrieves cost data for the given parameters.
 	FetchCosts(params CostParams) ([]CostRecord, error)
 
+	// FetchCommitments retrieves commitment data (RI, SP) for the given parameters.
+	FetchCommitments(params CommitmentParams) ([]CommitmentRecord, error)
+
 	// DiscoverResources finds active resources for a service in a region.
 	DiscoverResources(service, region string) ([]Resource, error)
 
@@ -75,4 +78,27 @@ type Resource struct {
 	Spec         string // JSON
 	Tags         string // JSON
 	State        string
+}
+
+// CommitmentRecord represents a cost commitment data point (RI, SP).
+type CommitmentRecord struct {
+	Provider           string
+	AccountID          string
+	CommitmentType     string // "savings_plan", "reserved_instance"
+	PeriodStart        string
+	PeriodEnd          string
+	TotalCommitment    float64
+	UsedCommitment     float64
+	OnDemandEquivalent float64
+	NetSavings         float64
+	UtilizationPct     float64
+	CoveragePct        float64
+	Currency           string
+}
+
+// CommitmentParams defines parameters for fetching commitment data.
+type CommitmentParams struct {
+	AccountID string
+	Start     time.Time
+	End       time.Time
 }
