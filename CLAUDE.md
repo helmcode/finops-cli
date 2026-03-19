@@ -54,9 +54,6 @@ Create an agent team with 4 teammates using delegate mode:
 - **Task tracking** is done exclusively via GitHub Issues linked to the [FinOps Project](https://github.com/orgs/helmcode/projects/3). All new tasks, bugs, and features MUST be created as GitHub Issues and associated with this project before work begins. Never work on untracked tasks. Assign issues to "@barckcode" user.
   - finops-cli issues → https://github.com/helmcode/finops-cli
   - Project management → https://github.com/orgs/helmcode/projects/3 (all issues must be linked here)
-- Local Repositories:
-  - finops-cli → `/Users/barckcode/repository/helmcode/cloud/finops-cli`
-
 ## Tech Stack
 
 - **Language:** Go 1.23+
