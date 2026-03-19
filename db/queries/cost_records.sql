@@ -82,6 +82,13 @@ SELECT MAX(period_end) AS latest_period_end
 FROM cost_records
 WHERE provider = ? AND account_id = ?;
 
+-- name: GetCostByServiceForRegion :many
+SELECT service, SUM(amount) AS total_amount, currency
+FROM cost_records
+WHERE provider = ? AND region = ? AND period_start >= ? AND period_end <= ?
+GROUP BY service, currency
+ORDER BY total_amount DESC;
+
 -- name: GetDistinctServices :many
 SELECT DISTINCT service FROM cost_records
 WHERE provider = ?

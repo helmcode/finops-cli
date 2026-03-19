@@ -159,7 +159,7 @@ func runReportSummary(cmd *cobra.Command, args []string) error {
 	ctx := context.Background()
 	resourceCount, _ := s.Queries.CountResourcesByProvider(ctx, "aws")
 
-	// Build region details with associated resources for collapsible sections
+	// Build region details with associated resources and service cost breakdown
 	var regionDetails []report.RegionDetail
 	for _, rc := range summaryData.CostByRegion {
 		rd := report.RegionDetail{
@@ -174,6 +174,31 @@ func runReportSummary(cmd *cobra.Command, args []string) error {
 			})
 			if err == nil {
 				rd.Resources = resources
+			}
+		}
+		// Always get service cost breakdown per region
+		regionName := rc.Region
+		if regionName == "" {
+			regionName = "NoRegion"
+		}
+		serviceCosts, err := s.Queries.GetCostByServiceForRegion(ctx, store.GetCostByServiceForRegionParams{
+			Provider:    "aws",
+			Region:      sql.NullString{String: regionName, Valid: true},
+			PeriodStart: dr.Start,
+			PeriodEnd:   dr.End,
+		})
+		if err == nil {
+			for _, sc := range serviceCosts {
+				amount := 0.0
+				if sc.TotalAmount.Valid {
+					amount = sc.TotalAmount.Float64
+				}
+				if amount > 0 {
+					rd.ServiceCosts = append(rd.ServiceCosts, report.RegionServiceCost{
+						Service: sc.Service,
+						Amount:  amount,
+					})
+				}
 			}
 		}
 		regionDetails = append(regionDetails, rd)

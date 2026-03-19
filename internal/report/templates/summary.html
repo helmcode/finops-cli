@@ -64,6 +64,21 @@
         <span class="arrow">&#9654;</span>
     </div>
     <div class="collapsible-content">
+        {{if .ServiceCosts}}
+        <table>
+            <thead>
+                <tr><th>Service</th><th>Cost</th></tr>
+            </thead>
+            <tbody>
+                {{range .ServiceCosts}}
+                <tr>
+                    <td>{{.Service}}</td>
+                    <td>${{formatMoney .Amount}}</td>
+                </tr>
+                {{end}}
+            </tbody>
+        </table>
+        {{end}}
         {{if .Resources}}
         <table>
             <thead>
@@ -81,8 +96,9 @@
                 {{end}}
             </tbody>
         </table>
-        {{else}}
-        <div style="padding: 1rem; color: #6b7280; font-size: 0.9rem;">No resource details available for this region.</div>
+        {{end}}
+        {{if and (not .ServiceCosts) (not .Resources)}}
+        <div style="padding: 1rem; color: #6b7280; font-size: 0.9rem;">No details available for this region.</div>
         {{end}}
     </div>
     {{end}}

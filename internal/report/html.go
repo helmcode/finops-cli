@@ -58,12 +58,19 @@ var funcMap = template.FuncMap{
 	"formatMoney": formatMoney,
 }
 
+// RegionServiceCost holds the cost of a single service within a region.
+type RegionServiceCost struct {
+	Service string
+	Amount  float64
+}
+
 // RegionDetail holds a region's cost and its associated resources.
 type RegionDetail struct {
-	Region      string
-	TotalAmount float64
-	Currency    string
-	Resources   []store.Resource
+	Region       string
+	TotalAmount  float64
+	Currency     string
+	Resources    []store.Resource
+	ServiceCosts []RegionServiceCost
 }
 
 // ReportData is the common data structure passed to all templates.
