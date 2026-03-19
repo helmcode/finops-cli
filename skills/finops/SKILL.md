@@ -6,7 +6,7 @@ allowed-tools: Bash(finops), Bash(finops *)
 
 # FinOps CLI
 
-Cloud cost analysis and optimization tool. Scans AWS accounts for cost data and resources, stores everything locally in SQLite, and generates reports with trend analysis, anomaly detection, and period comparisons.
+Cloud cost analysis and optimization tool. Scans AWS accounts (single or Organization with multiple accounts) for cost data and resources, stores everything locally in SQLite, and generates reports with trend analysis, anomaly detection, and period comparisons.
 
 ## Prerequisites
 
@@ -22,17 +22,11 @@ The CLI follows a **scan → report → analyze** pattern:
 2. **Report** — Generate reports from the local database (never calls AWS APIs)
 3. **Analyze** — Interpret JSON output to provide insights and recommendations
 
-Always use `--output json --file -` for report commands to get structured data on stdout.
+**CRITICAL:** Always use `--output json --file -` for report commands, and pipe through `2>/dev/null | sed '/^Report saved to:/d'` to get clean JSON on stdout. The CLI prints a `Report saved to: -` status line to stdout after the JSON which will break JSON parsers if not stripped.
 
 ```bash
-# Step 1: Sync cost data (run once, then periodically)
-finops scan --provider aws
-
-# Step 2: Generate reports as JSON to stdout
-finops report summary --output json --file -
-finops report anomalies --output json --file -
-
-# Step 3: Parse the JSON and reason about the data
+# Standard pattern for getting clean JSON from any report command:
+finops report summary --output json --file - 2>/dev/null | sed '/^Report saved to:/d'
 ```
 
 ## Command Reference
@@ -55,27 +49,31 @@ finops scan --provider aws [flags]
 | `--account` | string | — | Filter accounts (comma-separated IDs, org mode only) |
 
 **Behavior:**
-- Auto-detects AWS Organizations — scans all member accounts if in org mode
-- Incremental sync: first run fetches full history, subsequent runs fetch from last sync
-- Permission errors on individual accounts are logged as warnings; scan continues
-- Idempotent: safe to run multiple times (upserts via unique constraints)
+- Auto-detects AWS Organizations — scans all member accounts if in org mode. Works identically for single-account setups (scans only the current account).
+- Incremental sync: first run fetches full history, subsequent runs fetch from last sync date.
+- Permission errors on individual accounts in an organization are logged as warnings; scan continues with remaining accounts.
+- Idempotent: safe to run multiple times (upserts via unique constraints).
+- Discovers resources only for services with actual spend (zero-cost services are skipped).
+- Use `-v` (verbose) to see per-account details including record counts and skipped accounts.
 
-**Resource discovery services:** EC2, EBS, RDS, S3, Lambda, ECS, EKS, ElastiCache, NAT Gateway, CloudFront.
+**Resource discovery services:** EC2 instances, EBS volumes, RDS databases, S3 buckets, Lambda functions, ECS/EKS clusters, ElastiCache clusters, NAT Gateways, CloudFront distributions.
+
+**Services without resource discovery** (cost is tracked but no resource detail): CloudTrail, CodePipeline, Glue, KMS, CloudWatch, Route 53, SES, SNS, SQS, WAF, API Gateway, OpenSearch, QuickSight, Bedrock, DynamoDB, Redshift, Athena, Step Functions, Elastic Load Balancing, and others.
 
 ### `finops report summary`
 
 Full cost overview with totals, top services, cost by region, cost by account, commitment utilization, and resource counts.
 
 ```bash
-finops report summary --output json --file -
+finops report summary --output json --file - 2>/dev/null | sed '/^Report saved to:/d'
 ```
 
 ### `finops report top-services`
 
-Ranked list of services by total cost.
+Ranked list of top N services by total cost. Returns the same JSON structure as `summary` but with only `top_services` populated — `cost_by_account`, `monthly_spend`, and `cost_by_region` will be `null`.
 
 ```bash
-finops report top-services --output json --file - [--limit 10]
+finops report top-services --output json --file - --limit 20 2>/dev/null | sed '/^Report saved to:/d'
 ```
 
 | Flag | Type | Default | Description |
@@ -87,29 +85,34 @@ finops report top-services --output json --file - [--limit 10]
 Cost evolution over time with trend direction indicator.
 
 ```bash
-finops report trend --output json --file - [--service "Amazon Elastic Compute Cloud"]
+finops report trend --output json --file - 2>/dev/null | sed '/^Report saved to:/d'
+finops report trend --output json --file - --service "Amazon Relational Database Service" 2>/dev/null | sed '/^Report saved to:/d'
 ```
 
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
 | `--service` | string | — | Filter by service name (empty = all services combined) |
 
+**Note:** If the service name does not match any data, the response will have `"data_points": null` (not an empty array) and `"direction": "flat"`. Always use the exact service name from `top_services` output.
+
 ### `finops report anomalies`
 
 Detects cost spikes using z-score statistical analysis (threshold: |z| >= 2.0).
 
 ```bash
-finops report anomalies --output json --file -
+finops report anomalies --output json --file - 2>/dev/null | sed '/^Report saved to:/d'
 ```
 
-Severity levels: `high` (|z| >= 4.0), `medium` (|z| >= 3.0), `low` (|z| >= 2.0).
+Severity levels: `high` (|z| >= 4.0), `medium` (|z| >= 3.0), `low` (|z| >= 2.0). Negative deviations indicate unexpected drops; positive indicate spikes.
 
 ### `finops report compare`
 
 Side-by-side comparison of two time periods with absolute and percentage changes.
 
+**Known issue (v0.1.x):** The date range separator `:` conflicts with Unix path separator on macOS/Linux, causing parse failures. Until fixed, use the `trend` report to compare periods visually, or use `summary` data to calculate differences manually.
+
 ```bash
-finops report compare --output json --file - --current "2026-01-01:2026-03-01" --previous "2025-10-01:2025-12-01"
+finops report compare --output json --file - --current "2026-01-01:2026-03-01" --previous "2025-10-01:2025-12-01" 2>/dev/null | sed '/^Report saved to:/d'
 ```
 
 | Flag | Type | Default | Description |
@@ -119,10 +122,11 @@ finops report compare --output json --file - --current "2026-01-01:2026-03-01" -
 
 ### `finops report resources`
 
-Lists discovered resources with spec details and associated service cost context.
+Lists discovered resources with spec details and associated service cost context. Supports combined filters.
 
 ```bash
-finops report resources --output json --file - [--service "Amazon S3"] [--region "us-east-1"]
+finops report resources --output json --file - 2>/dev/null | sed '/^Report saved to:/d'
+finops report resources --output json --file - --service "AWS Lambda" --region "eu-west-1" 2>/dev/null | sed '/^Report saved to:/d'
 ```
 
 | Flag | Type | Default | Description |
@@ -132,10 +136,22 @@ finops report resources --output json --file - [--service "Amazon S3"] [--region
 
 ### `finops db stats`
 
-Shows database size, record counts, last sync date, and retention setting.
+Shows database size, record counts, last sync date, and retention setting. Use this to verify data freshness before generating reports.
 
 ```bash
 finops db stats
+```
+
+Example output:
+```
+Database Statistics
+
+Size:                288.00 KB
+Cost records:        709
+Resources:           258
+Sync history:        12
+Last sync:           2026-03-19T21:25:48Z
+Retention:           12 (default) months
 ```
 
 ### `finops db prune`
@@ -176,93 +192,120 @@ All `finops report *` subcommands accept:
 
 ## JSON Output Schemas
 
-**IMPORTANT:** Always use `--output json --file -` to get JSON on stdout for parsing.
+**CRITICAL:** Always use `--output json --file - 2>/dev/null | sed '/^Report saved to:/d'` to get clean, parseable JSON on stdout.
 
 ### Summary JSON
 
 ```json
 {
   "report_type": "summary",
-  "generated_at": "2026-03-19T20:07:45Z",
+  "generated_at": "2026-03-19T21:26:02Z",
   "period": {
     "start": "2025-09-01",
     "end": "2026-03-01"
   },
-  "total_spend": 39990.57,
+  "total_spend": 85459.92,
   "currency": "USD",
-  "active_services": 8,
-  "resources_discovered": 150,
+  "active_services": 39,
+  "resources_discovered": 258,
   "cost_by_account": [
     {
-      "account_id": "123456789012",
-      "total_amount": 15000.50,
+      "account_id": "557981700545",
+      "total_amount": 59978.97,
       "currency": "USD",
-      "percentage": 37.5,
-      "resource_count": 75,
+      "percentage": 70.2,
+      "resource_count": 258,
       "top_services": [
-        { "service": "Amazon Elastic Compute Cloud", "amount": 8500.25 }
+        { "service": "Amazon Relational Database Service", "amount": 10396.41 },
+        { "service": "Amazon OpenSearch Service", "amount": 7700.55 }
       ]
     }
   ],
   "monthly_spend": [
-    { "period": "2025-09-01", "amount": 6200.00 },
-    { "period": "2025-10-01", "amount": 6500.00 }
+    { "period": "2025-09-01", "amount": 11697.77 },
+    { "period": "2025-10-01", "amount": 14529.19 }
   ],
   "top_services": [
     {
-      "service": "Amazon Elastic Compute Cloud",
-      "total_amount": 18000.75,
+      "service": "Amazon Relational Database Service",
+      "total_amount": 14572.27,
       "currency": "USD",
-      "percentage": 45.0
+      "percentage": 17.1
     }
   ],
   "cost_by_region": [
     {
-      "region": "us-east-1",
-      "total_amount": 12000.00,
+      "region": "eu-west-1",
+      "total_amount": 52000.00,
       "currency": "USD",
-      "resource_count": 50,
+      "resource_count": 195,
       "service_costs": [
-        { "service": "Amazon Elastic Compute Cloud", "amount": 7500.00 }
+        { "service": "Amazon Relational Database Service", "amount": 14000.00 }
       ],
       "resources": [
         {
-          "service": "Amazon Elastic Compute Cloud",
-          "resource_type": "Instance",
-          "resource_id": "i-0abc123def456",
-          "name": "web-server-1",
-          "state": "running",
-          "account_id": "123456789012"
+          "service": "Amazon Relational Database Service",
+          "resource_type": "rds:db",
+          "resource_id": "arn:aws:rds:eu-west-1:557981700545:db:rds-app-pro",
+          "name": "rds-app-pro",
+          "account_id": "557981700545"
         }
       ]
     }
   ],
   "commitments": {
-    "total_committed": 10000.00,
-    "total_used": 8500.00,
-    "total_savings": 1500.00,
-    "avg_utilization_pct": 85.0,
+    "total_committed": 3258.00,
+    "total_used": 3257.99,
+    "total_savings": 0,
+    "avg_utilization_pct": 100,
     "currency": "USD",
     "has_data": true,
-    "permission_warning": false,
-    "spot_instance_count": 5,
+    "spot_instance_count": 0,
     "types": [
       {
         "type": "savings_plan",
-        "total_commitment": 6000.00,
-        "used_commitment": 5500.00,
-        "on_demand_equivalent": 6200.00,
-        "net_savings": 700.00
+        "total_commitment": 3258.00,
+        "used_commitment": 3257.99,
+        "on_demand_equivalent": 6995.14,
+        "net_savings": 0
       },
       {
         "type": "reserved_instance",
-        "total_commitment": 4000.00,
-        "used_commitment": 3000.00,
-        "on_demand_equivalent": 3800.00,
-        "net_savings": 800.00
+        "total_commitment": 0,
+        "used_commitment": 0,
+        "on_demand_equivalent": 70622.58,
+        "net_savings": 0
       }
     ]
   }
+}
+```
+
+**Key notes:**
+- `cost_by_region[].resources[]` has a **reduced field set** compared to the resources report: only `service`, `resource_type`, `resource_id`, `name`, `account_id` (no `state`, `spec`, `tags`, `region`).
+- `commitments` is present when commitment data exists. `has_data` indicates if there is any commitment information.
+- `top_services` within `cost_by_account` shows the top 5 services per account.
+
+### Top-Services JSON
+
+Uses the **same schema as Summary** but only `top_services` is populated. Fields `cost_by_account`, `monthly_spend`, and `cost_by_region` will be `null`:
+
+```json
+{
+  "report_type": "summary",
+  "generated_at": "2026-03-19T21:26:04Z",
+  "period": { "start": "2025-09-01", "end": "2026-03-01" },
+  "total_spend": 85459.92,
+  "currency": "USD",
+  "active_services": 5,
+  "resources_discovered": 0,
+  "cost_by_account": null,
+  "monthly_spend": null,
+  "top_services": [
+    { "service": "Tax", "total_amount": 15450.32, "currency": "USD", "percentage": 18.1 },
+    { "service": "Amazon Relational Database Service", "total_amount": 14572.27, "currency": "USD", "percentage": 17.1 }
+  ],
+  "cost_by_region": null
 }
 ```
 
@@ -271,39 +314,54 @@ All `finops report *` subcommands accept:
 ```json
 {
   "report_type": "trend",
-  "generated_at": "2026-03-19T20:07:45Z",
-  "service": "Amazon Elastic Compute Cloud",
-  "direction": "up",
+  "generated_at": "2026-03-19T21:26:04Z",
+  "service": "Amazon Relational Database Service",
+  "direction": "down",
   "data_points": [
-    { "period": "2025-09-01", "amount": 2800.00 },
-    { "period": "2025-10-01", "amount": 2950.00 },
-    { "period": "2025-11-01", "amount": 3100.00 }
+    { "period": "2025-09-01", "amount": 2000.71 },
+    { "period": "2025-10-01", "amount": 2307.75 },
+    { "period": "2025-11-01", "amount": 2403.52 },
+    { "period": "2025-12-01", "amount": 3125.51 },
+    { "period": "2026-01-01", "amount": 2581.33 },
+    { "period": "2026-02-01", "amount": 2153.44 }
   ]
 }
 ```
 
-`direction` values: `"up"` (>5% increase), `"down"` (>5% decrease), `"flat"` (within 5%).
+- `direction`: `"up"` (>5% increase last month), `"down"` (>5% decrease), `"flat"` (within 5%).
+- `service`: empty string `""` when no `--service` filter is applied (shows all combined).
+- `data_points`: `null` (not `[]`) when the service name doesn't match any data.
 
 ### Anomalies JSON
 
 ```json
 {
   "report_type": "anomalies",
-  "generated_at": "2026-03-19T20:07:45Z",
+  "generated_at": "2026-03-19T21:26:03Z",
   "anomalies": [
     {
-      "period": "2025-12-01",
+      "period": "2026-02-01",
       "service": "AWS Lambda",
-      "expected": 500.00,
-      "actual": 2000.00,
-      "deviation": 3.5,
-      "severity": "high"
+      "expected": 1.35,
+      "actual": 5.44,
+      "deviation": 2.14,
+      "severity": "low"
+    },
+    {
+      "period": "2025-09-01",
+      "service": "Amazon Elastic Compute Cloud - Compute",
+      "expected": 857.6,
+      "actual": 323.43,
+      "deviation": -2.0,
+      "severity": "low"
     }
   ]
 }
 ```
 
-`severity` values: `"high"` (|z| >= 4.0), `"medium"` (|z| >= 3.0), `"low"` (|z| >= 2.0).
+- `severity`: `"high"` (|z| >= 4.0), `"medium"` (|z| >= 3.0), `"low"` (|z| >= 2.0).
+- `deviation` can be **negative** (unexpected cost drop) or **positive** (cost spike). Both are anomalies.
+- `expected` is the historical mean cost for that service.
 
 ### Compare JSON
 
@@ -313,18 +371,18 @@ All `finops report *` subcommands accept:
   "generated_at": "2026-03-19T20:07:45Z",
   "current_period": { "start": "2026-01-01", "end": "2026-03-01" },
   "previous_period": { "start": "2025-10-01", "end": "2025-12-01" },
-  "total_current": 12500.00,
-  "total_previous": 11000.00,
-  "total_change": 1500.00,
-  "total_change_pct": 13.6,
+  "total_current": 29410.86,
+  "total_previous": 28929.97,
+  "total_change": 480.89,
+  "total_change_pct": 1.7,
   "currency": "USD",
   "service_deltas": [
     {
-      "service": "Amazon Elastic Compute Cloud",
-      "previous_amount": 5000.00,
-      "current_amount": 5800.00,
-      "absolute_change": 800.00,
-      "percent_change": 16.0,
+      "service": "Amazon Relational Database Service",
+      "previous_amount": 5529.03,
+      "current_amount": 4734.77,
+      "absolute_change": -794.26,
+      "percent_change": -14.4,
       "currency": "USD"
     }
   ]
@@ -336,52 +394,95 @@ All `finops report *` subcommands accept:
 ```json
 {
   "report_type": "resources",
-  "generated_at": "2026-03-19T20:07:45Z",
-  "total_count": 47,
+  "generated_at": "2026-03-19T21:26:43Z",
+  "total_count": 7,
   "resources": [
     {
-      "service": "Amazon Elastic Compute Cloud",
-      "resource_type": "Instance",
-      "resource_id": "i-0abc123def456",
-      "name": "web-server-1",
-      "region": "us-east-1",
-      "state": "running",
-      "account_id": "123456789012",
-      "spec": "{\"InstanceType\":\"t3.medium\",\"VpcId\":\"vpc-abc123\"}",
-      "tags": "{\"Environment\":\"production\",\"Team\":\"backend\"}"
+      "service": "Amazon Relational Database Service",
+      "resource_type": "rds:db",
+      "resource_id": "arn:aws:rds:eu-west-1:557981700545:db:rds-app-pro",
+      "name": "rds-app-pro",
+      "region": "eu-west-1",
+      "state": "available",
+      "account_id": "557981700545",
+      "spec": "{\"engine\":\"postgres\",\"engine_version\":\"17.7\",\"instance_class\":\"db.r8g.large\",\"multi_az\":true,\"storage_encrypted\":false,\"storage_gb\":100}",
+      "tags": "{}"
+    },
+    {
+      "service": "AWS Lambda",
+      "resource_type": "lambda:function",
+      "resource_id": "arn:aws:lambda:eu-west-1:557981700545:function:my-function",
+      "name": "my-function",
+      "region": "eu-west-1",
+      "account_id": "557981700545",
+      "spec": "{\"code_size\":3137,\"handler\":\"handler.lambda_handler\",\"memory_mb\":128,\"runtime\":\"python3.12\",\"timeout_s\":63}",
+      "tags": "{}"
     }
   ]
 }
 ```
 
-Note: `spec` and `tags` are JSON-encoded strings — parse them for structured data.
+**Key notes:**
+- `state` is **optional/null** — only present for EC2 (`running`/`stopped`), RDS (`available`), CloudFront (`enabled`/`disabled`), ElastiCache (`available`). Lambda, S3, and NAT Gateways do not have state.
+- `spec` and `tags` are **JSON-encoded strings** — parse them as nested JSON for structured data.
+- `spec` content varies by resource type (see Resource Types below).
+- `tags` is often `"{}"` (empty JSON object string) when no tags are set.
+
+## Resource Types and Spec Fields
+
+| resource_type | spec fields |
+|---|---|
+| `ec2:instance` | `instance_type`, `architecture`, `platform`, `vpc_id`, `state` |
+| `ec2:volume` | `volume_type`, `size_gb`, `iops`, `encrypted`, `state` |
+| `ec2:nat-gateway` | `state`, `vpc_id`, `subnet_id` |
+| `rds:db` | `engine`, `engine_version`, `instance_class`, `multi_az`, `storage_encrypted`, `storage_gb` |
+| `s3:bucket` | `creation_date` |
+| `lambda:function` | `runtime`, `memory_mb`, `timeout_s`, `handler`, `code_size` |
+| `elasticache:cluster` | `engine`, `engine_version`, `cache_node_type`, `num_cache_nodes` |
+| `cloudfront:distribution` | `status`, `domain_name`, `price_class`, `http_version` |
+
+## AWS Service Names Reference
+
+Service names in the CLI are **exact Cost Explorer names**. Use the full name when filtering. Common services:
+
+| Short name | Full Cost Explorer name |
+|---|---|
+| EC2 Compute | `Amazon Elastic Compute Cloud - Compute` |
+| EC2 Other | `EC2 - Other` |
+| RDS | `Amazon Relational Database Service` |
+| S3 | `Amazon Simple Storage Service` |
+| CloudFront | `Amazon CloudFront` |
+| Lambda | `AWS Lambda` |
+| EKS | `Amazon Elastic Container Service for Kubernetes` |
+| ElastiCache | `Amazon ElastiCache` |
+| OpenSearch | `Amazon OpenSearch Service` |
+| ELB | `Amazon Elastic Load Balancing` |
+| VPC | `Amazon Virtual Private Cloud` |
+| WAF | `AWS WAF` |
+| CloudWatch | `AmazonCloudWatch` |
+| DynamoDB | `Amazon DynamoDB` |
+| Route 53 | `Amazon Route 53` |
+| KMS | `AWS Key Management Service` |
+| SQS | `Amazon Simple Queue Service` |
+| Savings Plans | `Savings Plans for AWS Compute usage` |
+| Tax | `Tax` |
+
+**Tip:** Always run `finops report top-services --output json --file - --limit 50` first to discover the exact service names available in the dataset, then use those names for `--service` filters.
 
 ## Common Agent Patterns
 
 ### Full Cost Audit
 
-Scan data, then generate all key reports to build a complete picture:
+Scan data, then generate key reports for a complete picture:
 
 ```bash
 finops scan --provider aws
-finops report summary --output json --file -
-finops report anomalies --output json --file -
-finops report top-services --output json --file - --limit 20
+finops report summary --output json --file - 2>/dev/null | sed '/^Report saved to:/d'
+finops report anomalies --output json --file - 2>/dev/null | sed '/^Report saved to:/d'
+finops report top-services --output json --file - --limit 20 2>/dev/null | sed '/^Report saved to:/d'
 ```
 
 Parse the summary for total spend and distribution, check anomalies for spikes, and identify the highest-cost services.
-
-### Month-over-Month Comparison
-
-Compare the last two months to identify cost changes:
-
-```bash
-finops report compare --output json --file - \
-  --current "2026-02-01:2026-03-01" \
-  --previous "2026-01-01:2026-02-01"
-```
-
-Look at `service_deltas` for the biggest absolute and percentage changes.
 
 ### Investigate a Cost Spike
 
@@ -389,71 +490,104 @@ When anomalies are detected, drill into the specific service:
 
 ```bash
 # 1. Detect anomalies
-finops report anomalies --output json --file -
+finops report anomalies --output json --file - 2>/dev/null | sed '/^Report saved to:/d'
 
-# 2. Check the trend for the flagged service
-finops report trend --output json --file - --service "AWS Lambda"
+# 2. Check the trend for the flagged service (use exact name from anomaly output)
+finops report trend --output json --file - --service "AWS Lambda" 2>/dev/null | sed '/^Report saved to:/d'
 
-# 3. List resources for that service
-finops report resources --output json --file - --service "AWS Lambda"
+# 3. List resources for that service to identify what's running
+finops report resources --output json --file - --service "AWS Lambda" 2>/dev/null | sed '/^Report saved to:/d'
 ```
 
-### Resource Inventory by Region
+### Resource Right-Sizing Analysis
 
-Discover what resources exist in a specific region:
+Find potentially over-provisioned resources:
 
 ```bash
-finops report resources --output json --file - --region "us-east-1"
+# Get all EC2 instances
+finops report resources --output json --file - --service "Amazon Elastic Compute Cloud - Compute" 2>/dev/null | sed '/^Report saved to:/d'
+
+# Get all RDS databases
+finops report resources --output json --file - --service "Amazon Relational Database Service" 2>/dev/null | sed '/^Report saved to:/d'
 ```
 
-### Multi-Account Analysis
+Parse `spec` JSON strings to analyze instance types, memory allocation, and storage. Cross-reference with cost data from the summary to identify high-cost, potentially over-provisioned resources.
 
-Scan specific accounts in an AWS Organization:
+### Stopped/Idle Resource Detection
 
 ```bash
-finops scan --provider aws --account "111111111111,222222222222"
-finops report summary --output json --file -
+finops report resources --output json --file - --service "Amazon Elastic Compute Cloud - Compute" 2>/dev/null | sed '/^Report saved to:/d'
 ```
 
-The summary JSON groups costs by account in `cost_by_account`.
+Filter resources where `state` is `"stopped"` — these incur EBS storage costs without providing compute value. Also check for EBS volumes with `state: "available"` (unattached volumes).
+
+### Multi-Account Cost Breakdown
+
+For AWS Organizations, the summary groups costs by account:
+
+```bash
+finops scan --provider aws
+finops report summary --output json --file - 2>/dev/null | sed '/^Report saved to:/d'
+```
+
+Analyze `cost_by_account` to identify which accounts drive the most spend, and `cost_by_account[].top_services` for per-account service breakdown.
 
 ### Commitment Utilization Check
 
-The summary report includes commitment data (Savings Plans and Reserved Instances):
-
 ```bash
-finops report summary --output json --file -
+finops report summary --output json --file - 2>/dev/null | sed '/^Report saved to:/d'
 ```
 
-Check `commitments.avg_utilization_pct` — below 80% suggests over-provisioned commitments. Check `commitments.types` for per-type breakdown.
+Check `commitments`:
+- `avg_utilization_pct` below 80% → over-provisioned commitments, money being wasted
+- `avg_utilization_pct` at 100% → fully utilized, potentially room for more savings
+- Compare `on_demand_equivalent` vs `total_commitment` per type to quantify actual savings
 
-### Custom Date Range Scan
-
-Scan a specific time window:
+### Regional Cost Analysis
 
 ```bash
-finops scan --provider aws --from "2025-06-01" --to "2025-12-31"
+finops report summary --output json --file - 2>/dev/null | sed '/^Report saved to:/d'
 ```
+
+Analyze `cost_by_region` with `service_costs` breakdown to identify:
+- Regions with unexpectedly high costs
+- Services running in expensive regions that could be relocated
+- Resource sprawl across too many regions
 
 ### Data Freshness Check
 
-Verify the local database has data before generating reports:
+Always verify data is available before generating reports:
 
 ```bash
 finops db stats
 ```
 
-If no data or stale: run `finops scan --provider aws` first.
+If `Cost records: 0` or `Last sync` is stale, run `finops scan --provider aws` first.
+
+## Error Handling
+
+| Error | Meaning | Resolution |
+|---|---|---|
+| `required flag(s) "provider" not set` | Missing `--provider` | Add `--provider aws` |
+| `unsupported provider "X"` | Invalid provider | Only `aws` is supported |
+| `--months must be between 1 and 12` | Invalid months range | Use 1-12 |
+| `no data found. Run 'finops scan --provider aws' first` | Empty database | Run scan first |
+| `invalid --current: expected format YYYY-MM-DD:YYYY-MM-DD` | Compare date parse error (known bug on macOS/Linux) | See compare command notes |
+| Access denied on specific account | IAM permissions | Scan continues with other accounts; check verbose output |
+
+Errors return exit code 1. Success returns exit code 0 (even with empty results).
 
 ## Important Notes
 
 - **Reports are local-only.** They read from SQLite and never call AWS APIs. Only `finops scan` contacts AWS.
 - **Run scan first.** Reports will error with "no data found" if the database is empty.
-- **Incremental sync.** Subsequent scans only fetch new data since the last sync.
-- **Service names are AWS Cost Explorer names.** Use the full name (e.g., `"Amazon Elastic Compute Cloud"`, not `"EC2"`). Get exact names from the summary report's `top_services` array.
-- **Date format.** Dates use `YYYY-MM-DD`. Period comparisons use `YYYY-MM-DD:YYYY-MM-DD`.
+- **Incremental sync.** Subsequent scans only fetch new data since the last sync date.
+- **Service names are exact AWS Cost Explorer names.** Use `top-services` to discover the exact names before using `--service` filters.
+- **Date format.** Dates use `YYYY-MM-DD`. Report period defaults to last 6 months.
 - **Database location.** Data is stored at `~/.finops/data.db`.
 - **Retention.** Default 12 months. Change with `finops db prune --retention N`.
-- **Multi-account errors are non-fatal.** If some accounts lack permissions, scan continues with warnings.
-- **Monetary values** are float64 rounded to 2 decimal places. Currency is always in the JSON.
-- **`spec` and `tags` in resources** are JSON strings inside the JSON — parse them as nested JSON.
+- **Multi-account errors are non-fatal.** If some accounts lack permissions, scan continues with warnings and partial data.
+- **Monetary values** are float64 rounded to 2 decimal places. Currency is always in the JSON output.
+- **`spec` and `tags` in resources** are JSON-encoded strings inside the JSON — they must be parsed as nested JSON.
+- **Null vs empty arrays.** When no data matches a filter, arrays may be `null` instead of `[]`. Always handle both cases.
+- **`Report saved to: -`** is always printed to stdout. Use `sed '/^Report saved to:/d'` to strip it for clean JSON parsing.
