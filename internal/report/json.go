@@ -414,19 +414,6 @@ func GenerateCompareJSON(outputPath string, data *analysis.CompareResult, curren
 
 // GenerateResourcesJSON writes discovered resources as JSON.
 func GenerateResourcesJSON(outputPath string, resources interface{}) error {
-	// Accept []store.Resource via interface to avoid circular import
-	type resourceLike struct {
-		Service      string
-		ResourceType string
-		ResourceID   string
-		Name         interface{ Valid() bool; StringVal() string }
-		Region       interface{ Valid() bool; StringVal() string }
-		State        interface{ Valid() bool; StringVal() string }
-		AccountID    string
-		Spec         interface{ Valid() bool; StringVal() string }
-		Tags         interface{ Valid() bool; StringVal() string }
-	}
-
 	report := JSONResourcesReport{
 		ReportType:  "resources",
 		GeneratedAt: nowISO(),
