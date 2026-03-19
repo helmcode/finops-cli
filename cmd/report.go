@@ -264,7 +264,15 @@ func runReportSummary(cmd *cobra.Command, args []string) error {
 	path := outputPath("summary")
 	switch reportOutput {
 	case "csv":
-		if err := report.GenerateSummaryCSV(path, summaryData); err != nil {
+		csvRows, err := s.Queries.GetCostByAccountAndService(ctx, store.GetCostByAccountAndServiceParams{
+			Provider:    "aws",
+			PeriodStart: dr.Start,
+			PeriodEnd:   dr.End,
+		})
+		if err != nil {
+			return fmt.Errorf("getting cost data for CSV: %w", err)
+		}
+		if err := report.GenerateSummaryCSV(path, csvRows); err != nil {
 			return err
 		}
 	case "pdf":
@@ -311,7 +319,15 @@ func runReportTopServices(cmd *cobra.Command, args []string) error {
 	path := outputPath("top_services")
 	switch reportOutput {
 	case "csv":
-		if err := report.GenerateSummaryCSV(path, summaryData); err != nil {
+		csvRows, err := s.Queries.GetCostByAccountAndService(context.Background(), store.GetCostByAccountAndServiceParams{
+			Provider:    "aws",
+			PeriodStart: dr.Start,
+			PeriodEnd:   dr.End,
+		})
+		if err != nil {
+			return fmt.Errorf("getting cost data for CSV: %w", err)
+		}
+		if err := report.GenerateSummaryCSV(path, csvRows); err != nil {
 			return err
 		}
 	default:

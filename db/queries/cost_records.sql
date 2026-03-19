@@ -118,3 +118,10 @@ LIMIT 5;
 SELECT DISTINCT account_id FROM cost_records
 WHERE provider = ?
 ORDER BY account_id;
+
+-- name: GetCostByAccountAndService :many
+SELECT account_id, service, region, SUM(amount) AS total_amount, currency
+FROM cost_records
+WHERE provider = ? AND period_start >= ? AND period_end <= ?
+GROUP BY account_id, service, region, currency
+ORDER BY account_id, total_amount DESC;

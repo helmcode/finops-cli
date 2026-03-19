@@ -41,6 +41,57 @@ func (q *Queries) DeleteCostRecordsOlderThan(ctx context.Context, periodStart st
 	return err
 }
 
+const getCostByAccountAndService = `-- name: GetCostByAccountAndService :many
+SELECT account_id, service, region, SUM(amount) AS total_amount, currency
+FROM cost_records
+WHERE provider = ? AND period_start >= ? AND period_end <= ?
+GROUP BY account_id, service, region, currency
+ORDER BY account_id, total_amount DESC
+`
+
+type GetCostByAccountAndServiceParams struct {
+	Provider    string `json:"provider"`
+	PeriodStart string `json:"period_start"`
+	PeriodEnd   string `json:"period_end"`
+}
+
+type GetCostByAccountAndServiceRow struct {
+	AccountID   string          `json:"account_id"`
+	Service     string          `json:"service"`
+	Region      sql.NullString  `json:"region"`
+	TotalAmount sql.NullFloat64 `json:"total_amount"`
+	Currency    string          `json:"currency"`
+}
+
+func (q *Queries) GetCostByAccountAndService(ctx context.Context, arg GetCostByAccountAndServiceParams) ([]GetCostByAccountAndServiceRow, error) {
+	rows, err := q.db.QueryContext(ctx, getCostByAccountAndService, arg.Provider, arg.PeriodStart, arg.PeriodEnd)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetCostByAccountAndServiceRow{}
+	for rows.Next() {
+		var i GetCostByAccountAndServiceRow
+		if err := rows.Scan(
+			&i.AccountID,
+			&i.Service,
+			&i.Region,
+			&i.TotalAmount,
+			&i.Currency,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getCostByServiceForRegion = `-- name: GetCostByServiceForRegion :many
 SELECT service, SUM(amount) AS total_amount, currency
 FROM cost_records

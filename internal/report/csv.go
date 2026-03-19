@@ -6,10 +6,11 @@ import (
 	"os"
 
 	"github.com/helmcode/finops-cli/internal/analysis"
+	"github.com/helmcode/finops-cli/internal/store"
 )
 
-// GenerateSummaryCSV writes summary cost data to a CSV file.
-func GenerateSummaryCSV(outputPath string, data *analysis.SummaryData) error {
+// GenerateSummaryCSV writes detailed cost data to a CSV file with account and region breakdown.
+func GenerateSummaryCSV(outputPath string, rows []store.GetCostByAccountAndServiceRow) error {
 	f, err := os.Create(outputPath)
 	if err != nil {
 		return fmt.Errorf("creating CSV file: %w", err)
@@ -19,15 +20,25 @@ func GenerateSummaryCSV(outputPath string, data *analysis.SummaryData) error {
 	w := csv.NewWriter(f)
 	defer w.Flush()
 
-	if err := w.Write([]string{"Service", "Total Cost", "Currency"}); err != nil {
+	if err := w.Write([]string{"Account ID", "Service", "Region", "Total Cost", "Currency"}); err != nil {
 		return err
 	}
 
-	for _, svc := range data.TopServices {
+	for _, row := range rows {
+		amount := 0.0
+		if row.TotalAmount.Valid {
+			amount = row.TotalAmount.Float64
+		}
+		region := ""
+		if row.Region.Valid {
+			region = row.Region.String
+		}
 		if err := w.Write([]string{
-			svc.Service,
-			fmt.Sprintf("%.2f", svc.TotalAmount),
-			svc.Currency,
+			row.AccountID,
+			row.Service,
+			region,
+			fmt.Sprintf("%.2f", amount),
+			row.Currency,
 		}); err != nil {
 			return err
 		}
