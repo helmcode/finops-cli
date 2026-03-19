@@ -80,6 +80,10 @@ func GenerateCommitmentOverview(q *store.Queries, provider string, dr DateRange)
 
 	if overview.TotalCommitted > 0 {
 		overview.AvgUtilization = (overview.TotalUsed / overview.TotalCommitted) * 100
+	}
+
+	// Mark as having data if we have any commitment types with non-zero values
+	if len(overview.Types) > 0 {
 		overview.HasData = true
 	}
 
