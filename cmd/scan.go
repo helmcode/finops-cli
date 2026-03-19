@@ -198,6 +198,11 @@ func runScan(cmd *cobra.Command, args []string) error {
 		discoveredPairs := make(map[string]bool)
 
 		for _, record := range costRecords {
+			// Skip zero-cost records to avoid unnecessary API calls
+			if record.Amount <= 0 {
+				continue
+			}
+
 			region := record.Region
 			if region == "" || scanRegion != "all" {
 				if scanRegion != "all" {
