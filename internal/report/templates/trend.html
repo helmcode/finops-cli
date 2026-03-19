@@ -25,12 +25,12 @@ new Chart(document.getElementById('trendChart'), {
         datasets: [{
             label: '{{if .Data.Service}}{{.Data.Service}}{{else}}Total Cost{{end}}',
             data: [{{range $i, $d := .Data.DataPoints}}{{if $i}},{{end}}{{printf "%.2f" $d.Amount}}{{end}}],
-            borderColor: '#6c62ff',
-            backgroundColor: 'rgba(108, 98, 255, 0.08)',
+            borderColor: '#8b7fff',
+            backgroundColor: 'rgba(108, 98, 255, 0.12)',
             fill: true,
             tension: 0.3,
-            pointBackgroundColor: '#6c62ff',
-            pointBorderColor: '#fff',
+            pointBackgroundColor: '#8b7fff',
+            pointBorderColor: '#0f1117',
             pointBorderWidth: 2,
             pointRadius: 5,
             pointHoverRadius: 7
@@ -54,7 +54,7 @@ new Chart(document.getElementById('trendChart'), {
                 ticks: {
                     callback: function(v) { return '$' + v.toLocaleString('en-US'); }
                 },
-                grid: { color: 'rgba(108, 98, 255, 0.06)' }
+                grid: { color: 'rgba(255, 255, 255, 0.04)' }
             },
             x: {
                 grid: { display: false }

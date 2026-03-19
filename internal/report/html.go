@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/helmcode/finops-cli/internal/analysis"
 	"github.com/helmcode/finops-cli/internal/store"
 )
 
@@ -24,22 +25,24 @@ func formatMoney(f float64) string {
 		f = -f
 	}
 
-	intPart := int64(f)
-	decPart := int64((f - float64(intPart) + 0.005) * 100)
+	// Use Sprintf for correct rounding, then insert commas
+	formatted := fmt.Sprintf("%.2f", f)
+	parts := strings.SplitN(formatted, ".", 2)
+	intStr := parts[0]
+	decStr := parts[1]
 
-	// Format integer part with commas
-	s := fmt.Sprintf("%d", intPart)
-	if len(s) > 3 {
-		var parts []string
-		for len(s) > 3 {
-			parts = append([]string{s[len(s)-3:]}, parts...)
-			s = s[:len(s)-3]
+	// Add thousand separators to integer part
+	if len(intStr) > 3 {
+		var groups []string
+		for len(intStr) > 3 {
+			groups = append([]string{intStr[len(intStr)-3:]}, groups...)
+			intStr = intStr[:len(intStr)-3]
 		}
-		parts = append([]string{s}, parts...)
-		s = strings.Join(parts, ",")
+		groups = append([]string{intStr}, groups...)
+		intStr = strings.Join(groups, ",")
 	}
 
-	result := fmt.Sprintf("%s.%02d", s, decPart)
+	result := intStr + "." + decStr
 	if negative {
 		return "-" + result
 	}
@@ -73,6 +76,7 @@ type ReportData struct {
 	TotalResources int64
 	MonthCount     float64
 	RegionDetails  []RegionDetail
+	MonthlySpend   []analysis.MonthlyDataPoint
 }
 
 // GenerateHTML renders a report template to an HTML file.

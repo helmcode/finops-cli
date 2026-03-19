@@ -179,10 +179,21 @@ func runReportSummary(cmd *cobra.Command, args []string) error {
 		regionDetails = append(regionDetails, rd)
 	}
 
+	// Get monthly spend data for the bar chart
+	trendData, err := analysis.GenerateTrend(s.Queries, "aws", "")
+	if err != nil {
+		slog.Debug("could not generate monthly trend for summary", "error", err)
+	}
+	var monthlySpend []analysis.MonthlyDataPoint
+	if trendData != nil {
+		monthlySpend = trendData.DataPoints
+	}
+
 	reportData := report.ReportData{
 		Title: "Cost Summary", PeriodStart: dr.Start, PeriodEnd: dr.End,
 		Data: summaryData, TotalResources: resourceCount, MonthCount: 6,
 		RegionDetails: regionDetails,
+		MonthlySpend:  monthlySpend,
 	}
 
 	path := outputPath("summary")

@@ -3,6 +3,7 @@
 <div class="card">
     <h2>Cost Anomalies</h2>
     {{if .Data}}
+    <div class="table-wrap">
     <table>
         <thead>
             <tr><th>Period</th><th>Service</th><th>Expected</th><th>Actual</th><th>Deviation</th><th>Severity</th></tr>
@@ -20,8 +21,9 @@
             {{end}}
         </tbody>
     </table>
+    </div>
     {{else}}
-    <p style="padding: 1rem; color: #4a5568;">No anomalies detected in the selected period.</p>
+    <p style="padding: 1rem; color: #6b7280;">No anomalies detected in the selected period.</p>
     {{end}}
 </div>
 {{end}}

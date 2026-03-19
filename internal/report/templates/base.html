@@ -9,8 +9,8 @@
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-            background: #f8faff;
-            color: #1a1a1a;
+            background: #0f1117;
+            color: #e5e7eb;
             padding: 2rem;
             line-height: 1.6;
         }
@@ -23,7 +23,7 @@
             padding: 2.5rem;
             border-radius: 16px;
             margin-bottom: 2rem;
-            box-shadow: 0 4px 24px rgba(108, 98, 255, 0.25);
+            box-shadow: 0 4px 24px rgba(108, 98, 255, 0.3);
         }
         .header h1 {
             font-size: 1.8rem;
@@ -38,19 +38,18 @@
 
         /* Cards */
         .card {
-            background: white;
+            background: rgba(255, 255, 255, 0.04);
             border-radius: 16px;
             padding: 1.75rem;
             margin-bottom: 1.5rem;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.06);
-            border: 1px solid rgba(108, 98, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.08);
         }
         .card h2 {
             font-size: 1.2rem;
-            color: #1a1a1a;
+            color: #e5e7eb;
             margin-bottom: 1.25rem;
             padding-bottom: 0.75rem;
-            border-bottom: 2px solid #eef2ff;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
             font-weight: 600;
             letter-spacing: -0.01em;
         }
@@ -66,49 +65,52 @@
             flex: 1;
             min-width: 180px;
             padding: 1.25rem 1.5rem;
-            background: #eef2ff;
+            background: rgba(108, 98, 255, 0.1);
             border-radius: 12px;
-            border: 1px solid rgba(108, 98, 255, 0.1);
+            border: 1px solid rgba(108, 98, 255, 0.2);
         }
         .metric .value {
             font-size: 2rem;
             font-weight: 700;
-            color: #6c62ff;
+            color: #8b7fff;
             letter-spacing: -0.02em;
         }
         .metric .label {
             font-size: 0.85rem;
-            color: #4a5568;
+            color: #9ca3af;
             margin-top: 0.25rem;
             font-weight: 500;
         }
 
         /* Tables */
+        .table-wrap { overflow-x: auto; }
         table { width: 100%; border-collapse: collapse; }
         th {
-            background: #f8faff;
-            color: #4a5568;
+            background: rgba(255, 255, 255, 0.05);
+            color: #9ca3af;
             text-align: left;
             padding: 0.75rem 1rem;
             font-weight: 600;
-            font-size: 0.85rem;
+            font-size: 0.8rem;
             text-transform: uppercase;
-            letter-spacing: 0.03em;
-            border-bottom: 2px solid #eef2ff;
+            letter-spacing: 0.05em;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            white-space: nowrap;
         }
         td {
             padding: 0.75rem 1rem;
-            border-bottom: 1px solid #eef2ff;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
             font-size: 0.95rem;
-            color: #1a1a1a;
+            color: #d1d5db;
         }
-        tr:hover { background: #f8faff; }
+        tr:hover { background: rgba(255, 255, 255, 0.03); }
         td code {
-            background: #eef2ff;
+            background: rgba(108, 98, 255, 0.12);
             padding: 0.15rem 0.5rem;
             border-radius: 4px;
-            font-size: 0.85rem;
-            color: #6c62ff;
+            font-size: 0.8rem;
+            color: #9089fc;
+            word-break: break-all;
         }
 
         /* Charts */
@@ -126,9 +128,9 @@
             font-size: 0.8rem;
             font-weight: 600;
         }
-        .badge-high { background: #fff0f0; color: #ff5f57; }
-        .badge-medium { background: #fff8ee; color: #f39c12; }
-        .badge-low { background: #f0fdf4; color: #22c55e; }
+        .badge-high { background: rgba(255, 95, 87, 0.15); color: #ff5f57; }
+        .badge-medium { background: rgba(243, 156, 18, 0.15); color: #f39c12; }
+        .badge-low { background: rgba(34, 197, 94, 0.15); color: #22c55e; }
 
         /* Collapsible sections */
         .collapsible {
@@ -138,20 +140,20 @@
             align-items: center;
             justify-content: space-between;
             padding: 0.75rem 1rem;
-            border-bottom: 1px solid #eef2ff;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.06);
             transition: background 0.15s ease;
         }
-        .collapsible:hover { background: #f8faff; }
+        .collapsible:hover { background: rgba(255, 255, 255, 0.04); }
         .collapsible .arrow {
             display: inline-block;
-            width: 20px;
-            height: 20px;
+            width: 24px;
+            height: 24px;
             text-align: center;
-            line-height: 20px;
-            border-radius: 4px;
-            background: #eef2ff;
-            color: #6c62ff;
-            font-size: 0.75rem;
+            line-height: 24px;
+            border-radius: 6px;
+            background: rgba(108, 98, 255, 0.15);
+            color: #8b7fff;
+            font-size: 0.7rem;
             font-weight: 700;
             transition: transform 0.2s ease;
             flex-shrink: 0;
@@ -160,50 +162,54 @@
         .collapsible-content {
             display: none;
             padding: 0;
-            background: #f8faff;
-            border-bottom: 1px solid #eef2ff;
+            overflow-x: auto;
         }
         .collapsible-content.show { display: block; }
-        .collapsible-content table { margin: 0; }
+        .collapsible-content table { margin: 0; min-width: 600px; }
         .collapsible-content th {
-            background: #eef2ff;
-            font-size: 0.8rem;
+            background: rgba(108, 98, 255, 0.08);
+            font-size: 0.75rem;
         }
         .collapsible-content td {
-            font-size: 0.9rem;
+            font-size: 0.85rem;
             padding: 0.5rem 1rem;
+            max-width: 300px;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
         .collapsible .region-info {
             display: flex;
             align-items: center;
             gap: 1rem;
             flex: 1;
+            min-width: 0;
         }
         .collapsible .region-name {
             font-weight: 600;
-            color: #1a1a1a;
+            color: #e5e7eb;
         }
         .collapsible .region-cost {
             font-weight: 700;
-            color: #6c62ff;
+            color: #8b7fff;
         }
         .collapsible .resource-count {
             font-size: 0.8rem;
-            color: #4a5568;
-            background: #eef2ff;
-            padding: 0.15rem 0.5rem;
+            color: #9ca3af;
+            background: rgba(255, 255, 255, 0.06);
+            padding: 0.2rem 0.6rem;
             border-radius: 10px;
+            white-space: nowrap;
         }
 
         /* Footer */
         .footer {
             text-align: center;
             padding: 2.5rem;
-            color: #4a5568;
+            color: #6b7280;
             font-size: 0.85rem;
         }
         .footer a {
-            color: #6c62ff;
+            color: #8b7fff;
             text-decoration: none;
             font-weight: 500;
         }
@@ -229,6 +235,10 @@
         </div>
     </div>
     <script>
+    // Chart.js dark mode defaults
+    Chart.defaults.color = '#9ca3af';
+    Chart.defaults.borderColor = 'rgba(255, 255, 255, 0.06)';
+
     // Collapsible sections
     document.querySelectorAll('.collapsible').forEach(function(el) {
         el.addEventListener('click', function() {

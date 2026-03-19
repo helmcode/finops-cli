@@ -3,6 +3,7 @@
 <div class="card">
     <h2>Discovered Resources</h2>
     {{if .Data}}
+    <div class="table-wrap">
     <table>
         <thead>
             <tr><th>Service</th><th>Resource ID</th><th>Type</th><th>Name</th><th>Region</th><th>State</th></tr>
@@ -20,8 +21,9 @@
             {{end}}
         </tbody>
     </table>
+    </div>
     {{else}}
-    <p style="padding: 1rem; color: #4a5568;">No resources discovered. Run <code>finops scan</code> first.</p>
+    <p style="padding: 1rem; color: #6b7280;">No resources discovered. Run <code>finops scan</code> first.</p>
     {{end}}
 </div>
 {{end}}

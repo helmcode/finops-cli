@@ -17,12 +17,22 @@
     </div>
 </div>
 
+{{if .MonthlySpend}}
+<div class="card">
+    <h2>Monthly Spend</h2>
+    <div class="chart-container">
+        <canvas id="monthlyChart"></canvas>
+    </div>
+</div>
+{{end}}
+
 {{if .Data.TopServices}}
 <div class="card">
     <h2>Top Services by Cost</h2>
     <div class="chart-container">
         <canvas id="servicesChart"></canvas>
     </div>
+    <div class="table-wrap">
     <table>
         <thead>
             <tr><th>Service</th><th>Cost</th><th>% of Total</th></tr>
@@ -37,6 +47,7 @@
             {{end}}
         </tbody>
     </table>
+    </div>
 </div>
 {{end}}
 
@@ -71,7 +82,7 @@
             </tbody>
         </table>
         {{else}}
-        <div style="padding: 1rem; color: #4a5568; font-size: 0.9rem;">No resource details available for this region.</div>
+        <div style="padding: 1rem; color: #6b7280; font-size: 0.9rem;">No resource details available for this region.</div>
         {{end}}
     </div>
     {{end}}
@@ -79,6 +90,7 @@
 {{else if .Data.CostByRegion}}
 <div class="card">
     <h2>Cost by Region</h2>
+    <div class="table-wrap">
     <table>
         <thead>
             <tr><th>Region</th><th>Cost</th></tr>
@@ -92,26 +104,75 @@
             {{end}}
         </tbody>
     </table>
+    </div>
 </div>
 {{end}}
 
-{{if .Data.TopServices}}
+{{if .MonthlySpend}}
 <script>
-new Chart(document.getElementById('servicesChart'), {
-    type: 'pie',
+new Chart(document.getElementById('monthlyChart'), {
+    type: 'bar',
     data: {
-        labels: [{{range $i, $s := .Data.TopServices}}{{if $i}},{{end}}"{{$s.Service}}"{{end}}],
+        labels: [{{range $i, $d := .MonthlySpend}}{{if $i}},{{end}}"{{$d.Period}}"{{end}}],
         datasets: [{
-            data: [{{range $i, $s := .Data.TopServices}}{{if $i}},{{end}}{{printf "%.2f" $s.TotalAmount}}{{end}}],
-            backgroundColor: ['#6c62ff','#8b7fff','#ff80b5','#4facfe','#22c55e','#f39c12','#ff5f57','#9089fc','#4f39f6','#ff4694'],
-            borderWidth: 0
+            label: 'Monthly Spend',
+            data: [{{range $i, $d := .MonthlySpend}}{{if $i}},{{end}}{{printf "%.2f" $d.Amount}}{{end}}],
+            backgroundColor: 'rgba(108, 98, 255, 0.6)',
+            borderColor: '#6c62ff',
+            borderWidth: 1,
+            borderRadius: 6,
+            hoverBackgroundColor: '#8b7fff'
         }]
     },
     options: {
         responsive: true,
         maintainAspectRatio: false,
         plugins: {
-            legend: { position: 'right', labels: { padding: 16, usePointStyle: true, font: { size: 13 } } },
+            legend: { display: false },
+            tooltip: {
+                callbacks: {
+                    label: function(ctx) {
+                        return '$' + ctx.parsed.y.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                    }
+                }
+            }
+        },
+        scales: {
+            y: {
+                beginAtZero: true,
+                ticks: {
+                    callback: function(v) { return '$' + v.toLocaleString('en-US'); }
+                },
+                grid: { color: 'rgba(255, 255, 255, 0.04)' }
+            },
+            x: {
+                grid: { display: false }
+            }
+        }
+    }
+});
+</script>
+{{end}}
+
+{{if .Data.TopServices}}
+<script>
+new Chart(document.getElementById('servicesChart'), {
+    type: 'doughnut',
+    data: {
+        labels: [{{range $i, $s := .Data.TopServices}}{{if $i}},{{end}}"{{$s.Service}}"{{end}}],
+        datasets: [{
+            data: [{{range $i, $s := .Data.TopServices}}{{if $i}},{{end}}{{printf "%.2f" $s.TotalAmount}}{{end}}],
+            backgroundColor: ['#6c62ff','#8b7fff','#ff80b5','#4facfe','#22c55e','#f39c12','#ff5f57','#9089fc','#4f39f6','#ff4694'],
+            borderWidth: 0,
+            hoverOffset: 8
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        cutout: '55%',
+        plugins: {
+            legend: { position: 'right', labels: { padding: 16, usePointStyle: true, font: { size: 13 }, color: '#d1d5db' } },
             tooltip: {
                 callbacks: {
                     label: function(ctx) {
