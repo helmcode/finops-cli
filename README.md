@@ -4,6 +4,51 @@ A command-line tool for AWS cloud cost analysis and optimization. Scans your AWS
 
 **Local-first design** — your data stays on your machine. Reports never call cloud APIs.
 
+## Install
+
+### Agent Skill
+
+Add the FinOps skill to your AI agent (Claude Code, or any [skills.sh](https://skills.sh)-compatible agent):
+
+```bash
+npx skills add helmcode/finops-cli
+```
+
+This gives your agent the knowledge to use the FinOps CLI effectively — cost analysis, anomaly detection, report generation, and more.
+
+### CLI
+
+#### Quick install (Linux / macOS)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/helmcode/finops-cli/main/install.sh | sh
+```
+
+The script auto-detects your OS and architecture, downloads the correct binary, verifies the SHA256 checksum, and installs it.
+
+#### Homebrew (macOS / Linux)
+
+```bash
+brew install helmcode/tap/finops-cli
+```
+
+#### Go install
+
+```bash
+go install github.com/helmcode/finops-cli@latest
+```
+
+#### From source
+
+Requires Go 1.25+:
+
+```bash
+git clone https://github.com/helmcode/finops-cli.git
+cd finops-cli
+make build
+# Binary at ./bin/finops
+```
+
 ## Features
 
 - **Multi-account support** — auto-detects AWS Organizations, scans all linked accounts
@@ -15,36 +60,6 @@ A command-line tool for AWS cloud cost analysis and optimization. Scans your AWS
 - **Rich reports** — HTML with embedded charts (Chart.js), CSV, JSON, and PDF output
 - **Incremental sync** — only fetches new data on subsequent runs
 - **Zero CGO** — pure Go binary, cross-compiles to Linux, macOS, and Windows
-
-## Installation
-
-### From GitHub Releases (recommended)
-
-Download the latest binary for your platform from [Releases](https://github.com/helmcode/finops-cli/releases):
-
-```bash
-# macOS (Apple Silicon)
-curl -Lo finops.tar.gz https://github.com/helmcode/finops-cli/releases/latest/download/finops-cli_$(curl -s https://api.github.com/repos/helmcode/finops-cli/releases/latest | grep tag_name | cut -d'"' -f4 | sed 's/v//')_darwin_arm64.tar.gz
-tar xzf finops.tar.gz
-sudo mv finops /usr/local/bin/
-
-# macOS (Intel)
-# Replace darwin_arm64 with darwin_amd64
-
-# Linux (amd64)
-# Replace darwin_arm64 with linux_amd64
-```
-
-### From source
-
-Requires Go 1.25+:
-
-```bash
-git clone https://github.com/helmcode/finops-cli.git
-cd finops-cli
-make build
-# Binary at ./bin/finops
-```
 
 ## Quick Start
 
