@@ -91,6 +91,6 @@ jobs:
     steps:
       - name: Send webhook
         run: |
-          curl -fsSL -X POST "https://ai.helmcode.com/webhook/trigger/${{ secrets.AGENTCREW_QOS_TOKEN }}" \
+          curl -fsSL -X POST "${{ secrets.AGENTCREW_URL }}/webhook/trigger/${{ secrets.AGENTCREW_QOS_TOKEN }}" \
             -H "Content-Type: application/json" \
             -d '{"variables": {"changes": "${{ github.sha }}"}}'
