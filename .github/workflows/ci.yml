@@ -86,3 +86,15 @@ jobs:
           if [ "${{ matrix.goos }}" = "windows" ]; then EXT=".exe"; fi
           go build -ldflags "-s -w -X main.version=${VERSION}" \
             -o bin/finops_${{ matrix.goos }}_${{ matrix.goarch }}${EXT} .
+
+  notify:
+    name: Notify QoS
+    runs-on: ubuntu-latest
+    needs: [lint, test, build]
+    if: always()
+    steps:
+      - name: Send webhook
+        run: |
+          curl -fsSL -X POST "https://ai.helmcode.com/webhook/trigger/${{ secrets.AGENTCREW_QOS_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d '{"variables": {"changes": "${{ github.sha }}"}}'
