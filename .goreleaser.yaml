@@ -35,6 +35,19 @@ changelog:
       - "^test:"
       - "^ci:"
 
+brews:
+  - repository:
+      owner: helmcode
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+    homepage: "https://github.com/helmcode/finops-cli"
+    description: "Cloud FinOps CLI for cost analysis, anomaly detection, and optimization"
+    license: "MIT"
+    install: |
+      bin.install "finops"
+    test: |
+      system bin/"finops", "version"
+
 release:
   github:
     owner: helmcode
